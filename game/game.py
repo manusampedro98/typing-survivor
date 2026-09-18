@@ -22,6 +22,7 @@ from game.settings import (
     INPUT_HORIZONTAL_PADDING,
     KEY_REPEAT_DELAY,
     KEY_REPEAT_INTERVAL,
+    MAX_COMBO_MULTIPLIER,
     MAX_INPUT_LENGTH,
     MUTED_TEXT_COLOR,
     PANEL_COLOR,
@@ -29,6 +30,7 @@ from game.settings import (
     PLAYER_OUTLINE_COLOR,
     PLAYER_POSITION,
     PLAYER_RADIUS,
+    POINTS_PER_CHARACTER,
     RESTART_INPUT_BLOCK_DURATION,
     SMALL_FONT_SIZE,
     STARTING_LIVES,
@@ -38,6 +40,7 @@ from game.settings import (
     WINDOW_HEIGHT,
     WINDOW_TITLE,
     WINDOW_WIDTH,
+    WORDS_PER_MULTIPLIER_LEVEL,
 )
 from game.word_manager import WordManager
 
@@ -72,6 +75,8 @@ class Game:
         self.completed_words = 0
         self.missed_words = 0
         self.lives = STARTING_LIVES
+        self.score = 0
+        self.combo = 0
         self.game_over = False
 
         # Crea el primer enemigo asociado a la palabra seleccionada.
@@ -175,11 +180,28 @@ class Game:
     def _complete_current_word(self) -> None:
         """Registra el acierto y prepara el siguiente objetivo."""
 
+        # El combo se actualiza antes de calcular los puntos del acierto.
+        self.combo += 1
+        self.score += self._calculate_word_score(
+            self.word_manager.current_word
+        )
         self.completed_words += 1
         self.word_manager.next_word()
         self.typed_text = ""
         self.enemy = self._create_enemy()
         self._reset_caret_blink()
+
+    def _calculate_word_score(self, word: str) -> int:
+        """Calcula los puntos de una palabra según su longitud y combo."""
+
+        base_score = len(word) * POINTS_PER_CHARACTER
+        return base_score * self._get_combo_multiplier()
+
+    def _get_combo_multiplier(self) -> int:
+        """Devuelve el multiplicador actual dentro del límite permitido."""
+
+        multiplier = 1 + (self.combo - 1) // WORDS_PER_MULTIPLIER_LEVEL
+        return min(multiplier, MAX_COMBO_MULTIPLIER)
 
     def _create_enemy(self) -> Enemy:
         """Crea un enemigo vinculado con la palabra objetivo actual."""
@@ -214,6 +236,7 @@ class Game:
 
         self.missed_words += 1
         self.lives -= 1
+        self.combo = 0
         self.typed_text = ""
 
         if self.lives <= 0:
@@ -230,6 +253,8 @@ class Game:
         self.completed_words = 0
         self.missed_words = 0
         self.lives = STARTING_LIVES
+        self.score = 0
+        self.combo = 0
         self.game_over = False
         self.typed_text = ""
 
@@ -455,12 +480,19 @@ class Game:
         )
 
     def _draw_progress(self) -> None:
-        """Muestra el número de palabras completadas en la sesión."""
+        """Muestra la puntuación y el progreso de la sesión."""
+
+        # Sin combo activo, la interfaz muestra el multiplicador inicial.
+        combo_multiplier = (
+            self._get_combo_multiplier()
+            if self.combo > 0
+            else 1
+        )
 
         progress_surface = self.small_font.render(
             (
-                f"Completadas: {self.completed_words}"
-                f"  |  Falladas: {self.missed_words}"
+                f"Puntos: {self.score}"
+                f"  |  Combo: {self.combo} (x{combo_multiplier})"
                 f"  |  Vidas: {self.lives}"
             ),
             True,
@@ -493,7 +525,10 @@ class Game:
         self.screen.blit(game_over_surface, game_over_rect)
 
         result_surface = self.body_font.render(
-            f"Palabras completadas: {self.completed_words}",
+            (
+                f"Puntuación: {self.score}"
+                f"  |  Palabras: {self.completed_words}"
+            ),
             True,
             TEXT_COLOR,
         )

@@ -22,6 +22,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Enemigo móvil con velocidad independiente de los FPS.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
+- Puntuación basada en la longitud de cada palabra.
+- Combo de aciertos con multiplicador progresivo.
 - Pantalla de fin de partida con reinicio mediante la tecla R.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 
@@ -80,5 +82,6 @@ python main.py
 Al ejecutar el proyecto aparecerá un enemigo que avanza hacia la base. Cada carácter
 se marcará según coincida con su palabra y, al completar el objetivo, el enemigo será
 reemplazado. Si alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
-reiniciar con `R`. También puedes borrar con Retroceso y cerrar mediante Escape o el
-botón de la ventana.
+reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
+multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
+Retroceso y cerrar mediante Escape o el botón de la ventana.

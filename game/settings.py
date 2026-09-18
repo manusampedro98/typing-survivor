@@ -66,6 +66,12 @@ ENEMY_SPEED = 80.0
 ENEMY_REACH_DISTANCE = 8.0
 STARTING_LIVES = 3
 
+# Configuración del sistema de puntuación y combos.
+# Cada letra aporta puntos y el multiplicador sube cada tres aciertos seguidos.
+POINTS_PER_CHARACTER = 10
+WORDS_PER_MULTIPLIER_LEVEL = 3
+MAX_COMBO_MULTIPLIER = 5
+
 # Posiciones de la primera trayectoria de combate.
 BATTLE_LANE_Y = 300
 ENEMY_START_POSITION = (100.0, float(BATTLE_LANE_Y))
