@@ -2,6 +2,7 @@
 
 import pygame
 
+from game.word_manager import WordManager
 from game.settings import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
@@ -10,7 +11,9 @@ from game.settings import (
     CARET_BLINK_INTERVAL,
     CARET_HEIGHT,
     CARET_WIDTH,
+    CORRECT_COLOR,
     FPS,
+    INCORRECT_COLOR,
     INPUT_BOX_HEIGHT,
     INPUT_BOX_WIDTH,
     INPUT_HORIZONTAL_PADDING,
@@ -20,6 +23,7 @@ from game.settings import (
     MUTED_TEXT_COLOR,
     PANEL_COLOR,
     SMALL_FONT_SIZE,
+    TARGET_FONT_SIZE,
     TEXT_COLOR,
     TITLE_FONT_SIZE,
     WINDOW_HEIGHT,
@@ -47,8 +51,15 @@ class Game:
 
         # Las fuentes se crean una sola vez para evitar hacerlo en cada fotograma.
         self.title_font = pygame.font.Font(None, TITLE_FONT_SIZE)
+        self.target_font = pygame.font.Font(None, TARGET_FONT_SIZE)
         self.body_font = pygame.font.Font(None, BODY_FONT_SIZE)
         self.small_font = pygame.font.Font(None, SMALL_FONT_SIZE)
+
+        # Carga la lista y selecciona la primera palabra objetivo.
+        self.word_manager = WordManager()
+
+        # Registra el progreso básico de la sesión actual.
+        self.completed_words = 0
 
         # Almacena temporalmente los caracteres escritos por el jugador.
         self.typed_text = ""
@@ -116,13 +127,28 @@ class Game:
             character for character in new_text if character.isprintable()
         )
 
-        # Calcula el espacio disponible para impedir que el texto desborde el panel.
-        available_space = MAX_INPUT_LENGTH - len(self.typed_text)
+        # Impide escribir más caracteres de los que contiene la palabra objetivo.
+        input_limit = min(
+            MAX_INPUT_LENGTH,
+            len(self.word_manager.current_word),
+        )
+        available_space = input_limit - len(self.typed_text)
         text_to_add = printable_text[:available_space]
 
         if text_to_add:
             self.typed_text += text_to_add
             self._reset_caret_blink()
+
+            if self.typed_text == self.word_manager.current_word:
+                self._complete_current_word()
+
+    def _complete_current_word(self) -> None:
+        """Registra el acierto y prepara el siguiente objetivo."""
+
+        self.completed_words += 1
+        self.word_manager.next_word()
+        self.typed_text = ""
+        self._reset_caret_blink()
 
     def _update(self) -> None:
         """Actualiza los elementos que cambian con el paso del tiempo."""
@@ -161,7 +187,7 @@ class Game:
             ACCENT_COLOR,
         )
         title_rect = title_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 4)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 6)
         )
         self.screen.blit(title_surface, title_rect)
 
@@ -175,6 +201,10 @@ class Game:
         )
         self.screen.blit(subtitle_surface, subtitle_rect)
 
+        # Muestra la palabra que el jugador debe escribir.
+        self._draw_target_word()
+        self._draw_progress()
+
         # El rectángulo del panel se centra automáticamente en la ventana.
         input_box = pygame.Rect(
             0,
@@ -182,7 +212,10 @@ class Game:
             INPUT_BOX_WIDTH,
             INPUT_BOX_HEIGHT,
         )
-        input_box.center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+        input_box.center = (
+            WINDOW_WIDTH // 2,
+            WINDOW_HEIGHT // 2 + 65,
+        )
 
         pygame.draw.rect(
             self.screen,
@@ -250,3 +283,64 @@ class Game:
             center=(WINDOW_WIDTH // 2, input_box.bottom + 45)
         )
         self.screen.blit(help_surface, help_rect)
+
+    def _draw_target_word(self) -> None:
+        """Dibuja la palabra objetivo y compara cada carácter escrito."""
+
+        label_surface = self.small_font.render(
+            "PALABRA OBJETIVO",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        label_rect = label_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, 255)
+        )
+        self.screen.blit(label_surface, label_rect)
+
+        character_surfaces = []
+
+        # Asigna un color a cada carácter según el progreso del jugador.
+        for index, character in enumerate(self.word_manager.current_word):
+            if index < len(self.typed_text):
+                character_color = (
+                    CORRECT_COLOR
+                    if self.typed_text[index] == character
+                    else INCORRECT_COLOR
+                )
+            else:
+                character_color = TEXT_COLOR
+
+            character_surface = self.target_font.render(
+                character,
+                True,
+                character_color,
+            )
+            character_surfaces.append(character_surface)
+
+        # Calcula el ancho total para centrar la palabra completa.
+        total_width = sum(
+            surface.get_width()
+            for surface in character_surfaces
+        )
+        character_x = (WINDOW_WIDTH - total_width) // 2
+
+        # Dibuja las letras una junto a otra conservando sus colores.
+        for character_surface in character_surfaces:
+            character_rect = character_surface.get_rect(
+                midleft=(character_x, 305)
+            )
+            self.screen.blit(character_surface, character_rect)
+            character_x += character_surface.get_width()
+
+    def _draw_progress(self) -> None:
+        """Muestra el número de palabras completadas en la sesión."""
+
+        progress_surface = self.small_font.render(
+            f"Palabras completadas: {self.completed_words}",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        progress_rect = progress_surface.get_rect(
+            topright=(WINDOW_WIDTH - 30, 30)
+        )
+        self.screen.blit(progress_surface, progress_rect)

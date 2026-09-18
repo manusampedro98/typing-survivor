@@ -7,7 +7,7 @@ El proyecto se está construyendo de forma incremental para practicar organizaci
 ## Estado actual
 
 El proyecto dispone de una ventana principal, un bucle de juego estable a 60 FPS y
-una primera interfaz interactiva para capturar texto del jugador.
+un ciclo jugable básico para escribir y completar palabras objetivo.
 
 El desarrollo de las mecánicas se encuentra en progreso.
 
@@ -16,7 +16,10 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Entrada de texto compatible con la distribución del teclado.
 - Campo de escritura con cursor parpadeante.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
-- Límite de caracteres para evitar que el texto desborde la interfaz.
+- Palabras objetivo cargadas desde un archivo externo.
+- Comparación visual de caracteres correctos e incorrectos.
+- Selección automática de una nueva palabra al completar la actual.
+- Contador de palabras completadas durante la sesión.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 
 ## Tecnologías
@@ -34,11 +37,13 @@ typing-survivor/
 │   ├── fonts/           # Fuentes de texto
 │   ├── images/          # Imágenes y sprites
 │   └── sounds/          # Música y efectos de sonido
-├── data/                # Listas de palabras y otros datos
+├── data/
+│   └── words.txt        # Palabras disponibles durante la partida
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
 │   ├── game.py          # Controlador y bucle principal
-│   └── settings.py      # Configuración visual y general
+│   ├── settings.py      # Configuración visual y general
+│   └── word_manager.py  # Carga y selección de palabras
 ├── .gitignore           # Archivos excluidos del repositorio
 ├── main.py              # Punto de entrada
 ├── README.md            # Documentación
@@ -68,5 +73,7 @@ conda activate typing-survivor
 python main.py
 ```
 
-Al ejecutar el proyecto se abrirá la interfaz de escritura. Puedes introducir texto,
-borrarlo con Retroceso y cerrar la aplicación mediante Escape o el botón de la ventana.
+Al ejecutar el proyecto aparecerá una palabra objetivo. Cada carácter se marcará según
+coincida con el objetivo y, al completar la palabra, se seleccionará una nueva
+automáticamente. Puedes borrar con Retroceso y cerrar mediante Escape o el botón de la
+ventana.
