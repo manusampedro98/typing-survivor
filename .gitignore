@@ -1,0 +1,44 @@
+# Entornos de Python
+.venv/
+venv/
+env/
+.conda/
+conda-meta/
+
+# Archivos generados por Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Cachés de herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Cobertura
+.coverage
+.coverage.*
+htmlcov/
+
+# Paquetes y compilaciones
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Variables de entorno y configuración local
+.env
+.env.*
+!.env.example
+
+# Editores
+.idea/
+.vscode/
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Registros
+*.log
