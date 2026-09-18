@@ -24,6 +24,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
 - Puntuación basada en la longitud de cada palabra.
 - Combo de aciertos con multiplicador progresivo.
+- Cálculo en tiempo real de PPM, precisión y errores de escritura.
 - Pantalla de fin de partida con reinicio mediante la tecla R.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 
@@ -49,6 +50,7 @@ typing-survivor/
 │   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── game.py          # Controlador y bucle principal
 │   ├── settings.py      # Configuración visual y general
+│   ├── typing_stats.py  # Velocidad, precisión y errores
 │   └── word_manager.py  # Carga y selección de palabras
 ├── .gitignore           # Archivos excluidos del repositorio
 ├── main.py              # Punto de entrada
@@ -84,4 +86,5 @@ se marcará según coincida con su palabra y, al completar el objetivo, el enemi
 reemplazado. Si alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
 reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
-Retroceso y cerrar mediante Escape o el botón de la ventana.
+Retroceso y cerrar mediante Escape o el botón de la ventana. Las PPM se calculan desde
+la primera tecla escrita y la precisión compara cada intento con el carácter esperado.

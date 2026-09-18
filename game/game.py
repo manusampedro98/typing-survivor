@@ -42,6 +42,7 @@ from game.settings import (
     WINDOW_WIDTH,
     WORDS_PER_MULTIPLIER_LEVEL,
 )
+from game.typing_stats import TypingStats
 from game.word_manager import WordManager
 
 
@@ -70,6 +71,9 @@ class Game:
 
         # Carga la lista y selecciona la primera palabra objetivo.
         self.word_manager = WordManager()
+
+        # Mantiene las métricas de escritura separadas de la lógica del juego.
+        self.typing_stats = TypingStats()
 
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
@@ -171,6 +175,19 @@ class Game:
         text_to_add = printable_text[:available_space]
 
         if text_to_add:
+            start_index = len(self.typed_text)
+
+            # Cada carácter aceptado cuenta como un intento para la precisión.
+            for offset, character in enumerate(text_to_add):
+                target_index = start_index + offset
+                expected_character = self.word_manager.current_word[
+                    target_index
+                ]
+                self.typing_stats.register_character(
+                    character,
+                    expected_character,
+                )
+
             self.typed_text += text_to_add
             self._reset_caret_blink()
 
@@ -221,6 +238,9 @@ class Game:
 
         current_time = pygame.time.get_ticks()
 
+        # La medición se detiene automáticamente al finalizar la partida.
+        self.typing_stats.update(delta_time)
+
         # Alterna la visibilidad del cursor cada cierto número de milisegundos.
         if current_time - self.caret_last_toggle >= CARET_BLINK_INTERVAL:
             self.caret_visible = not self.caret_visible
@@ -257,6 +277,7 @@ class Game:
         self.combo = 0
         self.game_over = False
         self.typed_text = ""
+        self.typing_stats.reset()
 
         self.word_manager.next_word()
         self.enemy = self._create_enemy()
@@ -503,6 +524,20 @@ class Game:
         )
         self.screen.blit(progress_surface, progress_rect)
 
+        typing_surface = self.small_font.render(
+            (
+                f"PPM: {self.typing_stats.words_per_minute:.1f}"
+                f"  |  Precisión: {self.typing_stats.accuracy:.1f}%"
+                f"  |  Errores: {self.typing_stats.errors}"
+            ),
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        typing_rect = typing_surface.get_rect(
+            topright=(WINDOW_WIDTH - 30, progress_rect.bottom + 8)
+        )
+        self.screen.blit(typing_surface, typing_rect)
+
     def _draw_game_over(self) -> None:
         """Dibuja una capa de derrota con las opciones disponibles."""
 
@@ -537,12 +572,26 @@ class Game:
         )
         self.screen.blit(result_surface, result_rect)
 
+        stats_surface = self.small_font.render(
+            (
+                f"PPM: {self.typing_stats.words_per_minute:.1f}"
+                f"  |  Precisión: {self.typing_stats.accuracy:.1f}%"
+                f"  |  Errores: {self.typing_stats.errors}"
+            ),
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        stats_rect = stats_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 55)
+        )
+        self.screen.blit(stats_surface, stats_rect)
+
         restart_surface = self.small_font.render(
             "Pulsa R para reiniciar  |  Esc para cerrar",
             True,
             MUTED_TEXT_COLOR,
         )
         restart_rect = restart_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 65)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100)
         )
         self.screen.blit(restart_surface, restart_rect)
