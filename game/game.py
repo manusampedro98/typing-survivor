@@ -2,16 +2,18 @@
 
 import pygame
 
-from game.word_manager import WordManager
+from game.enemy import Enemy
 from game.settings import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
+    BATTLE_LANE_Y,
     BODY_FONT_SIZE,
     BORDER_COLOR,
     CARET_BLINK_INTERVAL,
     CARET_HEIGHT,
     CARET_WIDTH,
     CORRECT_COLOR,
+    ENEMY_START_POSITION,
     FPS,
     INCORRECT_COLOR,
     INPUT_BOX_HEIGHT,
@@ -22,6 +24,10 @@ from game.settings import (
     MAX_INPUT_LENGTH,
     MUTED_TEXT_COLOR,
     PANEL_COLOR,
+    PLAYER_COLOR,
+    PLAYER_OUTLINE_COLOR,
+    PLAYER_POSITION,
+    PLAYER_RADIUS,
     SMALL_FONT_SIZE,
     TARGET_FONT_SIZE,
     TEXT_COLOR,
@@ -30,6 +36,7 @@ from game.settings import (
     WINDOW_TITLE,
     WINDOW_WIDTH,
 )
+from game.word_manager import WordManager
 
 
 class Game:
@@ -60,6 +67,10 @@ class Game:
 
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
+        self.missed_words = 0
+
+        # Crea el primer enemigo asociado a la palabra seleccionada.
+        self.enemy = self._create_enemy()
 
         # Almacena temporalmente los caracteres escritos por el jugador.
         self.typed_text = ""
@@ -83,12 +94,12 @@ class Game:
 
         try:
             while self.running:
-                self._handle_events()
-                self._update()
-                self._draw()
+                # Convierte los milisegundos del fotograma en segundos.
+                delta_time = self.clock.tick(FPS) / 1000.0
 
-                # Mantiene una velocidad estable y evita consumo innecesario de CPU.
-                self.clock.tick(FPS)
+                self._handle_events()
+                self._update(delta_time)
+                self._draw()
         finally:
             # Detiene la captura de texto y libera los recursos de Pygame.
             pygame.key.stop_text_input()
@@ -148,10 +159,20 @@ class Game:
         self.completed_words += 1
         self.word_manager.next_word()
         self.typed_text = ""
+        self.enemy = self._create_enemy()
         self._reset_caret_blink()
 
-    def _update(self) -> None:
-        """Actualiza los elementos que cambian con el paso del tiempo."""
+    def _create_enemy(self) -> Enemy:
+        """Crea un enemigo vinculado con la palabra objetivo actual."""
+
+        return Enemy(
+            word=self.word_manager.current_word,
+            start_position=ENEMY_START_POSITION,
+            target_position=PLAYER_POSITION,
+        )
+
+    def _update(self, delta_time: float) -> None:
+        """Actualiza el cursor y el movimiento del enemigo."""
 
         current_time = pygame.time.get_ticks()
 
@@ -159,6 +180,20 @@ class Game:
         if current_time - self.caret_last_toggle >= CARET_BLINK_INTERVAL:
             self.caret_visible = not self.caret_visible
             self.caret_last_toggle = current_time
+
+        self.enemy.update(delta_time)
+
+        if self.enemy.has_reached_target():
+            self._handle_enemy_arrival()
+
+    def _handle_enemy_arrival(self) -> None:
+        """Registra el fallo y prepara un enemigo con una palabra nueva."""
+
+        self.missed_words += 1
+        self.word_manager.next_word()
+        self.typed_text = ""
+        self.enemy = self._create_enemy()
+        self._reset_caret_blink()
 
 
     def _reset_caret_blink(self) -> None:
@@ -173,6 +208,7 @@ class Game:
         # Limpia el contenido del fotograma anterior.
         self.screen.fill(BACKGROUND_COLOR)
 
+        self._draw_battlefield()
         self._draw_interface()
 
         # Muestra en pantalla todo lo dibujado durante este fotograma.
@@ -287,20 +323,10 @@ class Game:
     def _draw_target_word(self) -> None:
         """Dibuja la palabra objetivo y compara cada carácter escrito."""
 
-        label_surface = self.small_font.render(
-            "PALABRA OBJETIVO",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        label_rect = label_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, 255)
-        )
-        self.screen.blit(label_surface, label_rect)
-
         character_surfaces = []
 
         # Asigna un color a cada carácter según el progreso del jugador.
-        for index, character in enumerate(self.word_manager.current_word):
+        for index, character in enumerate(self.enemy.word):
             if index < len(self.typed_text):
                 character_color = (
                     CORRECT_COLOR
@@ -322,21 +348,69 @@ class Game:
             surface.get_width()
             for surface in character_surfaces
         )
-        character_x = (WINDOW_WIDTH - total_width) // 2
+
+        # Mantiene la palabra completa dentro de los límites de la ventana.
+        half_word_width = total_width // 2
+        word_center_x = max(
+            half_word_width + 20,
+            min(
+                round(self.enemy.position.x),
+                WINDOW_WIDTH - half_word_width - 20,
+            ),
+        )
+        character_x = word_center_x - half_word_width
+        word_center_y = round(self.enemy.position.y) - 58
 
         # Dibuja las letras una junto a otra conservando sus colores.
         for character_surface in character_surfaces:
             character_rect = character_surface.get_rect(
-                midleft=(character_x, 305)
+                midleft=(character_x, word_center_y)
             )
             self.screen.blit(character_surface, character_rect)
             character_x += character_surface.get_width()
+
+    def _draw_battlefield(self) -> None:
+        """Dibuja la trayectoria, el enemigo y la base provisional."""
+
+        lane_start = (round(ENEMY_START_POSITION[0]), BATTLE_LANE_Y)
+        lane_end = (round(PLAYER_POSITION[0]), BATTLE_LANE_Y)
+
+        # La línea permite leer con claridad la trayectoria del enemigo.
+        pygame.draw.line(
+            self.screen,
+            BORDER_COLOR,
+            lane_start,
+            lane_end,
+            width=3,
+        )
+
+        self.enemy.draw(self.screen)
+
+        player_center = (
+            round(PLAYER_POSITION[0]),
+            round(PLAYER_POSITION[1]),
+        )
+        pygame.draw.circle(
+            self.screen,
+            PLAYER_OUTLINE_COLOR,
+            player_center,
+            PLAYER_RADIUS + 5,
+        )
+        pygame.draw.circle(
+            self.screen,
+            PLAYER_COLOR,
+            player_center,
+            PLAYER_RADIUS,
+        )
 
     def _draw_progress(self) -> None:
         """Muestra el número de palabras completadas en la sesión."""
 
         progress_surface = self.small_font.render(
-            f"Palabras completadas: {self.completed_words}",
+            (
+                f"Completadas: {self.completed_words}"
+                f"  |  Falladas: {self.missed_words}"
+            ),
             True,
             MUTED_TEXT_COLOR,
         )

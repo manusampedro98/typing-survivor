@@ -7,7 +7,7 @@ El proyecto se está construyendo de forma incremental para practicar organizaci
 ## Estado actual
 
 El proyecto dispone de una ventana principal, un bucle de juego estable a 60 FPS y
-un ciclo jugable básico para escribir y completar palabras objetivo.
+un primer ciclo de supervivencia contra enemigos asociados a palabras.
 
 El desarrollo de las mecánicas se encuentra en progreso.
 
@@ -19,7 +19,9 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Palabras objetivo cargadas desde un archivo externo.
 - Comparación visual de caracteres correctos e incorrectos.
 - Selección automática de una nueva palabra al completar la actual.
-- Contador de palabras completadas durante la sesión.
+- Enemigo móvil con velocidad independiente de los FPS.
+- Eliminación del enemigo al completar su palabra.
+- Registro de palabras completadas y falladas durante la sesión.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 
 ## Tecnologías
@@ -41,6 +43,7 @@ typing-survivor/
 │   └── words.txt        # Palabras disponibles durante la partida
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
+│   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── game.py          # Controlador y bucle principal
 │   ├── settings.py      # Configuración visual y general
 │   └── word_manager.py  # Carga y selección de palabras
@@ -73,7 +76,7 @@ conda activate typing-survivor
 python main.py
 ```
 
-Al ejecutar el proyecto aparecerá una palabra objetivo. Cada carácter se marcará según
-coincida con el objetivo y, al completar la palabra, se seleccionará una nueva
-automáticamente. Puedes borrar con Retroceso y cerrar mediante Escape o el botón de la
-ventana.
+Al ejecutar el proyecto aparecerá un enemigo que avanza hacia la base. Cada carácter
+se marcará según coincida con su palabra y, al completar el objetivo, el enemigo será
+reemplazado. Si alcanza la base, se registrará como palabra fallada. Puedes borrar con
+Retroceso y cerrar mediante Escape o el botón de la ventana.
