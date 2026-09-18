@@ -15,6 +15,7 @@ from game.settings import (
     CORRECT_COLOR,
     ENEMY_START_POSITION,
     FPS,
+    GAME_OVER_OVERLAY_COLOR,
     INCORRECT_COLOR,
     INPUT_BOX_HEIGHT,
     INPUT_BOX_WIDTH,
@@ -28,7 +29,9 @@ from game.settings import (
     PLAYER_OUTLINE_COLOR,
     PLAYER_POSITION,
     PLAYER_RADIUS,
+    RESTART_INPUT_BLOCK_DURATION,
     SMALL_FONT_SIZE,
+    STARTING_LIVES,
     TARGET_FONT_SIZE,
     TEXT_COLOR,
     TITLE_FONT_SIZE,
@@ -68,6 +71,8 @@ class Game:
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
         self.missed_words = 0
+        self.lives = STARTING_LIVES
+        self.game_over = False
 
         # Crea el primer enemigo asociado a la palabra seleccionada.
         self.enemy = self._create_enemy()
@@ -78,6 +83,9 @@ class Game:
         # Estado utilizado para hacer parpadear el cursor de escritura.
         self.caret_visible = True
         self.caret_last_toggle = pygame.time.get_ticks()
+
+        # Marca hasta cuándo debe ignorarse una entrada usada como control.
+        self.text_input_blocked_until = 0
 
         # Activa la recepción de texto respetando la distribución del teclado.
         pygame.key.start_text_input()
@@ -115,14 +123,22 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 self._handle_control_key(event)
 
-            elif event.type == pygame.TEXTINPUT:
-                self._append_text(event.text)
+            elif event.type == pygame.TEXTINPUT and not self.game_over:
+                current_time = pygame.time.get_ticks()
+
+                if current_time >= self.text_input_blocked_until:
+                    self._append_text(event.text)
 
     def _handle_control_key(self, event: pygame.event.Event) -> None:
         """Gestiona las teclas que controlan la aplicación o editan el texto."""
 
         if event.key == pygame.K_ESCAPE:
             self.running = False
+
+        elif self.game_over:
+            # Durante la derrota solo se permite reiniciar o cerrar el juego.
+            if event.key == pygame.K_r:
+                self._restart_game()
 
         elif event.key == pygame.K_BACKSPACE:
             # Evita modificar el texto si el campo ya está vacío.
@@ -132,6 +148,9 @@ class Game:
 
     def _append_text(self, new_text: str) -> None:
         """Añade caracteres imprimibles sin superar el límite permitido."""
+
+        if self.game_over:
+            return
 
         # Descarta posibles caracteres de control que no deben mostrarse.
         printable_text = "".join(
@@ -174,6 +193,10 @@ class Game:
     def _update(self, delta_time: float) -> None:
         """Actualiza el cursor y el movimiento del enemigo."""
 
+        # Congela la partida mientras se muestra la pantalla de derrota.
+        if self.game_over:
+            return
+
         current_time = pygame.time.get_ticks()
 
         # Alterna la visibilidad del cursor cada cierto número de milisegundos.
@@ -190,10 +213,35 @@ class Game:
         """Registra el fallo y prepara un enemigo con una palabra nueva."""
 
         self.missed_words += 1
-        self.word_manager.next_word()
+        self.lives -= 1
         self.typed_text = ""
+
+        if self.lives <= 0:
+            self.game_over = True
+            return
+
+        self.word_manager.next_word()
         self.enemy = self._create_enemy()
         self._reset_caret_blink()
+
+    def _restart_game(self) -> None:
+        """Restablece el progreso y comienza una sesión nueva."""
+
+        self.completed_words = 0
+        self.missed_words = 0
+        self.lives = STARTING_LIVES
+        self.game_over = False
+        self.typed_text = ""
+
+        self.word_manager.next_word()
+        self.enemy = self._create_enemy()
+        self._reset_caret_blink()
+
+        # Evita que la R usada para reiniciar se escriba en el campo.
+        self.text_input_blocked_until = (
+            pygame.time.get_ticks()
+            + RESTART_INPUT_BLOCK_DURATION
+        )
 
 
     def _reset_caret_blink(self) -> None:
@@ -210,6 +258,9 @@ class Game:
 
         self._draw_battlefield()
         self._draw_interface()
+
+        if self.game_over:
+            self._draw_game_over()
 
         # Muestra en pantalla todo lo dibujado durante este fotograma.
         pygame.display.flip()
@@ -410,6 +461,7 @@ class Game:
             (
                 f"Completadas: {self.completed_words}"
                 f"  |  Falladas: {self.missed_words}"
+                f"  |  Vidas: {self.lives}"
             ),
             True,
             MUTED_TEXT_COLOR,
@@ -418,3 +470,44 @@ class Game:
             topright=(WINDOW_WIDTH - 30, 30)
         )
         self.screen.blit(progress_surface, progress_rect)
+
+    def _draw_game_over(self) -> None:
+        """Dibuja una capa de derrota con las opciones disponibles."""
+
+        # La superficie con transparencia oscurece la partida sin ocultarla.
+        overlay = pygame.Surface(
+            (WINDOW_WIDTH, WINDOW_HEIGHT),
+            pygame.SRCALPHA,
+        )
+        overlay.fill(GAME_OVER_OVERLAY_COLOR)
+        self.screen.blit(overlay, (0, 0))
+
+        game_over_surface = self.title_font.render(
+            "FIN DE LA PARTIDA",
+            True,
+            INCORRECT_COLOR,
+        )
+        game_over_rect = game_over_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
+        )
+        self.screen.blit(game_over_surface, game_over_rect)
+
+        result_surface = self.body_font.render(
+            f"Palabras completadas: {self.completed_words}",
+            True,
+            TEXT_COLOR,
+        )
+        result_rect = result_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
+        )
+        self.screen.blit(result_surface, result_rect)
+
+        restart_surface = self.small_font.render(
+            "Pulsa R para reiniciar  |  Esc para cerrar",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        restart_rect = restart_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 65)
+        )
+        self.screen.blit(restart_surface, restart_rect)

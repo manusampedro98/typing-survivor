@@ -26,6 +26,7 @@ ENEMY_OUTLINE_COLOR = (105, 38, 60)
 ENEMY_CORE_COLOR = (255, 190, 205)
 PLAYER_COLOR = (80, 220, 180)
 PLAYER_OUTLINE_COLOR = (35, 105, 90)
+GAME_OVER_OVERLAY_COLOR = (8, 10, 18, 225)
 
 
 # Tamaños de las fuentes utilizadas en la interfaz.
@@ -47,6 +48,9 @@ KEY_REPEAT_DELAY = 350
 # El intervalo determina los milisegundos entre repeticiones.
 KEY_REPEAT_INTERVAL = 45
 
+# Tiempo durante el que se ignora la tecla usada para reiniciar la partida.
+RESTART_INPUT_BLOCK_DURATION = 150
+
 # Separación horizontal entre el texto y el borde del panel.
 INPUT_HORIZONTAL_PADDING = 24
 
@@ -60,6 +64,7 @@ CARET_BLINK_INTERVAL = 500
 ENEMY_RADIUS = 28
 ENEMY_SPEED = 80.0
 ENEMY_REACH_DISTANCE = 8.0
+STARTING_LIVES = 3
 
 # Posiciones de la primera trayectoria de combate.
 BATTLE_LANE_Y = 300
