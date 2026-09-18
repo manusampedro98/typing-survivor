@@ -6,10 +6,18 @@ El proyecto se está construyendo de forma incremental para practicar organizaci
 
 ## Estado actual
 
-El proyecto dispone de una ventana principal y un bucle de juego estable a 60 FPS.
-La aplicación procesa los eventos del sistema y actualiza la pantalla en cada fotograma.
+El proyecto dispone de una ventana principal, un bucle de juego estable a 60 FPS y
+una primera interfaz interactiva para capturar texto del jugador.
 
 El desarrollo de las mecánicas se encuentra en progreso.
+
+## Características actuales
+
+- Entrada de texto compatible con la distribución del teclado.
+- Campo de escritura con cursor parpadeante.
+- Borrado continuo al mantener pulsada la tecla Retroceso.
+- Límite de caracteres para evitar que el texto desborde la interfaz.
+- Cierre mediante el botón de la ventana o la tecla Escape.
 
 ## Tecnologías
 
@@ -28,7 +36,9 @@ typing-survivor/
 │   └── sounds/          # Música y efectos de sonido
 ├── data/                # Listas de palabras y otros datos
 ├── game/
-│   └── __init__.py      # Paquete para los módulos del juego
+│   ├── __init__.py      # Define el paquete del juego
+│   ├── game.py          # Controlador y bucle principal
+│   └── settings.py      # Configuración visual y general
 ├── .gitignore           # Archivos excluidos del repositorio
 ├── main.py              # Punto de entrada
 ├── README.md            # Documentación
@@ -58,4 +68,5 @@ conda activate typing-survivor
 python main.py
 ```
 
-Al ejecutar el proyecto se abrirá la ventana principal del juego. Puedes cerrarla mediante el botón de cierre de la ventana.
+Al ejecutar el proyecto se abrirá la interfaz de escritura. Puedes introducir texto,
+borrarlo con Retroceso y cerrar la aplicación mediante Escape o el botón de la ventana.
