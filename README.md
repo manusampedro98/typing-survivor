@@ -6,7 +6,10 @@ El proyecto se está construyendo de forma incremental para practicar organizaci
 
 ## Estado actual
 
-La estructura inicial y el entorno de desarrollo están preparados. Por ahora, `main.py` comprueba que Pygame está instalado correctamente y termina sin abrir una ventana.
+El proyecto dispone de una ventana principal y un bucle de juego estable a 60 FPS.
+La aplicación procesa los eventos del sistema y actualiza la pantalla en cada fotograma.
+
+El desarrollo de las mecánicas se encuentra en progreso.
 
 ## Tecnologías
 
@@ -55,13 +58,4 @@ conda activate typing-survivor
 python main.py
 ```
 
-Por ahora se mostrará un mensaje confirmando que Pygame está instalado y que el entorno está preparado.
-
-## Próximos pasos
-
-- Crear la ventana principal y el bucle del juego.
-- Gestionar eventos de teclado.
-- Mostrar palabras asociadas a enemigos.
-- Implementar puntuación, combos y vidas.
-- Calcular velocidad de escritura y precisión.
-- Añadir dificultad progresiva, sonido y efectos visuales.
+Al ejecutar el proyecto se abrirá la ventana principal del juego. Puedes cerrarla mediante el botón de cierre de la ventana.
