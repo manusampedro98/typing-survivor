@@ -25,6 +25,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Puntuación basada en la longitud de cada palabra.
 - Combo de aciertos con multiplicador progresivo.
 - Cálculo en tiempo real de PPM, precisión y errores de escritura.
+- Oleadas con aumento gradual y limitado de la velocidad enemiga.
 - Pantalla de fin de partida con reinicio mediante la tecla R.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 
@@ -51,6 +52,7 @@ typing-survivor/
 │   ├── game.py          # Controlador y bucle principal
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
+│   ├── wave_manager.py  # Oleadas y dificultad progresiva
 │   └── word_manager.py  # Carga y selección de palabras
 ├── .gitignore           # Archivos excluidos del repositorio
 ├── main.py              # Punto de entrada
@@ -88,3 +90,5 @@ reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
 Retroceso y cerrar mediante Escape o el botón de la ventana. Las PPM se calculan desde
 la primera tecla escrita y la precisión compara cada intento con el carácter esperado.
+Cada cinco palabras completadas comienza una nueva oleada y aumenta la velocidad de
+los enemigos hasta alcanzar el límite configurado.

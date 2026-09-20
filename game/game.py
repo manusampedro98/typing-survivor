@@ -40,9 +40,11 @@ from game.settings import (
     WINDOW_HEIGHT,
     WINDOW_TITLE,
     WINDOW_WIDTH,
+    WORDS_PER_WAVE,
     WORDS_PER_MULTIPLIER_LEVEL,
 )
 from game.typing_stats import TypingStats
+from game.wave_manager import WaveManager
 from game.word_manager import WordManager
 
 
@@ -74,6 +76,9 @@ class Game:
 
         # Mantiene las métricas de escritura separadas de la lógica del juego.
         self.typing_stats = TypingStats()
+
+        # Gestiona el aumento gradual de dificultad entre oleadas.
+        self.wave_manager = WaveManager()
 
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
@@ -203,6 +208,7 @@ class Game:
             self.word_manager.current_word
         )
         self.completed_words += 1
+        self.wave_manager.register_completed_word()
         self.word_manager.next_word()
         self.typed_text = ""
         self.enemy = self._create_enemy()
@@ -227,6 +233,7 @@ class Game:
             word=self.word_manager.current_word,
             start_position=ENEMY_START_POSITION,
             target_position=PLAYER_POSITION,
+            speed=self.wave_manager.enemy_speed,
         )
 
     def _update(self, delta_time: float) -> None:
@@ -278,6 +285,7 @@ class Game:
         self.game_over = False
         self.typed_text = ""
         self.typing_stats.reset()
+        self.wave_manager.reset()
 
         self.word_manager.next_word()
         self.enemy = self._create_enemy()
@@ -337,6 +345,7 @@ class Game:
         # Muestra la palabra que el jugador debe escribir.
         self._draw_target_word()
         self._draw_progress()
+        self._draw_wave_progress()
 
         # El rectángulo del panel se centra automáticamente en la ventana.
         input_box = pygame.Rect(
@@ -538,6 +547,30 @@ class Game:
         )
         self.screen.blit(typing_surface, typing_rect)
 
+    def _draw_wave_progress(self) -> None:
+        """Muestra la oleada y el avance hacia la siguiente."""
+
+        wave_surface = self.body_font.render(
+            f"OLEADA {self.wave_manager.current_wave}",
+            True,
+            ACCENT_COLOR,
+        )
+        wave_rect = wave_surface.get_rect(topleft=(30, 25))
+        self.screen.blit(wave_surface, wave_rect)
+
+        progress_surface = self.small_font.render(
+            (
+                f"Progreso: {self.wave_manager.completed_words_in_wave}"
+                f"/{WORDS_PER_WAVE}"
+            ),
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        progress_rect = progress_surface.get_rect(
+            topleft=(30, wave_rect.bottom + 5)
+        )
+        self.screen.blit(progress_surface, progress_rect)
+
     def _draw_game_over(self) -> None:
         """Dibuja una capa de derrota con las opciones disponibles."""
 
@@ -563,6 +596,7 @@ class Game:
             (
                 f"Puntuación: {self.score}"
                 f"  |  Palabras: {self.completed_words}"
+                f"  |  Oleada: {self.wave_manager.current_wave}"
             ),
             True,
             TEXT_COLOR,

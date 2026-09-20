@@ -66,6 +66,11 @@ ENEMY_SPEED = 80.0
 ENEMY_REACH_DISTANCE = 8.0
 STARTING_LIVES = 3
 
+# La dificultad aumenta al completar grupos de palabras.
+WORDS_PER_WAVE = 5
+ENEMY_SPEED_INCREMENT = 20.0
+MAX_ENEMY_SPEED = 200.0
+
 # Configuración del sistema de puntuación y combos.
 # Cada letra aporta puntos y el multiplicador sube cada tres aciertos seguidos.
 POINTS_PER_CHARACTER = 10
