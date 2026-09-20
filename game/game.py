@@ -12,41 +12,28 @@ from game.effects import EffectManager
 from game.game_state import GameState
 from game.save_manager import SaveManager
 from game.settings import (
-    ACCENT_COLOR,
     BACKGROUND_COLOR,
     BODY_FONT_SIZE,
-    BORDER_COLOR,
     CARET_BLINK_INTERVAL,
-    CARET_HEIGHT,
-    CARET_WIDTH,
     CONTROL_INPUT_BLOCK_DURATION,
     FPS,
-    GAME_OVER_OVERLAY_COLOR,
-    INCORRECT_COLOR,
-    INPUT_BOX_HEIGHT,
-    INPUT_BOX_CENTER_Y,
-    INPUT_BOX_WIDTH,
-    INPUT_HORIZONTAL_PADDING,
     KEY_REPEAT_DELAY,
     KEY_REPEAT_INTERVAL,
     MAX_COMBO_MULTIPLIER,
     MAX_INPUT_LENGTH,
-    MUTED_TEXT_COLOR,
-    PANEL_COLOR,
     PLAYER_POSITION,
     POINTS_PER_CHARACTER,
     SMALL_FONT_SIZE,
     STARTING_LIVES,
     TARGET_FONT_SIZE,
-    TEXT_COLOR,
     TITLE_FONT_SIZE,
     WINDOW_HEIGHT,
     WINDOW_TITLE,
     WINDOW_WIDTH,
-    WORDS_PER_WAVE,
     WORDS_PER_MULTIPLIER_LEVEL,
 )
 from game.typing_stats import TypingStats
+from game.ui_renderer import UIRenderer
 from game.wave_manager import WaveManager
 from game.word_manager import WordManager
 
@@ -78,6 +65,14 @@ class Game:
         self.battlefield_renderer = BattlefieldRenderer(
             screen=self.screen,
             target_font=self.target_font,
+            body_font=self.body_font,
+            small_font=self.small_font,
+        )
+
+        # La interfaz tiene su propio renderizador y no altera la partida.
+        self.ui_renderer = UIRenderer(
+            screen=self.screen,
+            title_font=self.title_font,
             body_font=self.body_font,
             small_font=self.small_font,
         )
@@ -431,349 +426,31 @@ class Game:
             typed_text=self.typed_text,
             effect_manager=self.effect_manager,
         )
-        self._draw_interface()
-
-        if self.state is GameState.MENU:
-            self._draw_menu()
-        elif self.state is GameState.PAUSED:
-            self._draw_pause()
-        elif self.state is GameState.GAME_OVER:
-            self._draw_game_over()
+        combo_multiplier = (
+            self._get_combo_multiplier() if self.combo > 0 else 1
+        )
+        self.ui_renderer.draw_interface(
+            typed_text=self.typed_text,
+            caret_visible=self.caret_visible,
+            score=self.score,
+            high_score=self.save_manager.high_score,
+            combo=self.combo,
+            combo_multiplier=combo_multiplier,
+            lives=self.lives,
+            typing_stats=self.typing_stats,
+            wave_manager=self.wave_manager,
+            defeated_enemies=self.defeated_enemies,
+        )
+        self.ui_renderer.draw_state_overlay(
+            state=self.state,
+            high_score=self.save_manager.high_score,
+            is_new_high_score=self.is_new_high_score,
+            score=self.score,
+            completed_words=self.completed_words,
+            wave_manager=self.wave_manager,
+            defeated_enemies=self.defeated_enemies,
+            typing_stats=self.typing_stats,
+        )
 
         # Muestra en pantalla todo lo dibujado durante este fotograma.
         pygame.display.flip()
-
-    def _draw_interface(self) -> None:
-        """Dibuja la información y la zona de escritura."""
-
-        self._draw_progress()
-        self._draw_wave_progress()
-
-        # El rectángulo del panel se centra automáticamente en la ventana.
-        input_box = pygame.Rect(
-            0,
-            0,
-            INPUT_BOX_WIDTH,
-            INPUT_BOX_HEIGHT,
-        )
-        input_box.center = (
-            WINDOW_WIDTH // 2,
-            INPUT_BOX_CENTER_Y,
-        )
-
-        pygame.draw.rect(
-            self.screen,
-            PANEL_COLOR,
-            input_box,
-            border_radius=12,
-        )
-        pygame.draw.rect(
-            self.screen,
-            BORDER_COLOR,
-            input_box,
-            width=2,
-            border_radius=12,
-        )
-
-        # Define el punto fijo desde el que comienza el texto escrito.
-        input_start_x = input_box.left + INPUT_HORIZONTAL_PADDING
-
-        if self.typed_text:
-            displayed_text = self.typed_text
-            displayed_color = TEXT_COLOR
-            text_x = input_start_x
-        else:
-            displayed_text = "Empieza a escribir..."
-            displayed_color = MUTED_TEXT_COLOR
-
-            # Deja espacio para mostrar el cursor delante del texto de ayuda.
-            text_x = input_start_x + 12
-
-        text_surface = self.body_font.render(
-            displayed_text,
-            True,
-            displayed_color,
-        )
-        text_rect = text_surface.get_rect(
-            midleft=(text_x, input_box.centery)
-        )
-        self.screen.blit(text_surface, text_rect)
-
-        # Sitúa el cursor después del texto o al inicio cuando el campo está vacío.
-        caret_x = text_rect.right + 3 if self.typed_text else input_start_x
-
-        if self.caret_visible:
-            caret_rect = pygame.Rect(
-                caret_x,
-                0,
-                CARET_WIDTH,
-                CARET_HEIGHT,
-            )
-            caret_rect.centery = input_box.centery
-
-            pygame.draw.rect(
-                self.screen,
-                ACCENT_COLOR,
-                caret_rect,
-                border_radius=2,
-            )
-
-        help_surface = self.small_font.render(
-            "Inicial: elegir objetivo  |  Retroceso: borrar  |  Esc: pausa",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        help_rect = help_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, input_box.top - 18)
-        )
-        self.screen.blit(help_surface, help_rect)
-
-    def _draw_progress(self) -> None:
-        """Muestra la puntuación y el progreso de la sesión."""
-
-        # Sin combo activo, la interfaz muestra el multiplicador inicial.
-        combo_multiplier = (
-            self._get_combo_multiplier()
-            if self.combo > 0
-            else 1
-        )
-
-        progress_surface = self.small_font.render(
-            (
-                f"Puntos: {self.score}"
-                f"  |  Récord: {self.save_manager.high_score.score}"
-                f"  |  Combo: {self.combo} (x{combo_multiplier})"
-                f"  |  Vidas: {self.lives}"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        progress_rect = progress_surface.get_rect(
-            topright=(WINDOW_WIDTH - 30, 30)
-        )
-        self.screen.blit(progress_surface, progress_rect)
-
-        typing_surface = self.small_font.render(
-            (
-                f"PPM: {self.typing_stats.words_per_minute:.1f}"
-                f"  |  Precisión: {self.typing_stats.accuracy:.1f}%"
-                f"  |  Errores: {self.typing_stats.errors}"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        typing_rect = typing_surface.get_rect(
-            topright=(WINDOW_WIDTH - 30, progress_rect.bottom + 8)
-        )
-        self.screen.blit(typing_surface, typing_rect)
-
-    def _draw_wave_progress(self) -> None:
-        """Muestra la oleada y el avance hacia la siguiente."""
-
-        wave_surface = self.body_font.render(
-            f"OLEADA {self.wave_manager.current_wave}",
-            True,
-            ACCENT_COLOR,
-        )
-        wave_rect = wave_surface.get_rect(topleft=(30, 25))
-        self.screen.blit(wave_surface, wave_rect)
-
-        progress_surface = self.small_font.render(
-            (
-                f"Progreso: {self.wave_manager.completed_words_in_wave}"
-                f"/{WORDS_PER_WAVE}"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        progress_rect = progress_surface.get_rect(
-            topleft=(30, wave_rect.bottom + 5)
-        )
-        self.screen.blit(progress_surface, progress_rect)
-
-        defeated_surface = self.small_font.render(
-            self._get_enemy_defeat_summary(),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        defeated_rect = defeated_surface.get_rect(
-            topleft=(30, progress_rect.bottom + 5)
-        )
-        self.screen.blit(defeated_surface, defeated_rect)
-
-    def _get_enemy_defeat_summary(self) -> str:
-        """Construye el resumen de enemigos eliminados por tipo."""
-
-        return "  |  ".join(
-            (
-                f"{enemy_type.plural_name}: "
-                f"{self.defeated_enemies[enemy_type]}"
-            )
-            for enemy_type in EnemyType
-        )
-
-    def _draw_game_over(self) -> None:
-        """Dibuja una capa de derrota con las opciones disponibles."""
-
-        self._draw_overlay()
-
-        game_over_surface = self.title_font.render(
-            (
-                "NUEVO RÉCORD"
-                if self.is_new_high_score
-                else "FIN DE LA PARTIDA"
-            ),
-            True,
-            ACCENT_COLOR if self.is_new_high_score else INCORRECT_COLOR,
-        )
-        game_over_rect = game_over_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
-        )
-        self.screen.blit(game_over_surface, game_over_rect)
-
-        result_surface = self.body_font.render(
-            (
-                f"Puntuación: {self.score}"
-                f"  |  Récord: {self.save_manager.high_score.score}"
-            ),
-            True,
-            TEXT_COLOR,
-        )
-        result_rect = result_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
-        )
-        self.screen.blit(result_surface, result_rect)
-
-        session_surface = self.small_font.render(
-            (
-                f"Palabras: {self.completed_words}"
-                f"  |  Oleada: {self.wave_manager.current_wave}"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        session_rect = session_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 45)
-        )
-        self.screen.blit(session_surface, session_rect)
-
-        defeated_surface = self.small_font.render(
-            f"Eliminados  |  {self._get_enemy_defeat_summary()}",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        defeated_rect = defeated_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 80)
-        )
-        self.screen.blit(defeated_surface, defeated_rect)
-
-        stats_surface = self.small_font.render(
-            (
-                f"PPM: {self.typing_stats.words_per_minute:.1f}"
-                f"  |  Precisión: {self.typing_stats.accuracy:.1f}%"
-                f"  |  Errores: {self.typing_stats.errors}"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        stats_rect = stats_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 115)
-        )
-        self.screen.blit(stats_surface, stats_rect)
-
-        restart_surface = self.small_font.render(
-            "Pulsa R para reiniciar  |  Esc para cerrar",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        restart_rect = restart_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 155)
-        )
-        self.screen.blit(restart_surface, restart_rect)
-
-    def _draw_menu(self) -> None:
-        """Dibuja el menú que espera antes de comenzar la partida."""
-
-        self._draw_overlay()
-
-        menu_title = self.title_font.render(
-            "TYPING SURVIVOR",
-            True,
-            ACCENT_COLOR,
-        )
-        menu_title_rect = menu_title.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
-        )
-        self.screen.blit(menu_title, menu_title_rect)
-
-        record = self.save_manager.high_score
-        record_surface = self.small_font.render(
-            (
-                f"Récord: {record.score} puntos"
-                f"  |  Oleada {record.wave}"
-                f"  |  {record.words_per_minute:.1f} PPM"
-                f"  |  {record.accuracy:.1f}% precisión"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        record_rect = record_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 5)
-        )
-        self.screen.blit(record_surface, record_rect)
-
-        start_surface = self.body_font.render(
-            "Pulsa Enter o Espacio para comenzar",
-            True,
-            TEXT_COLOR,
-        )
-        start_rect = start_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 55)
-        )
-        self.screen.blit(start_surface, start_rect)
-
-        exit_surface = self.small_font.render(
-            "Esc: cerrar",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        exit_rect = exit_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100)
-        )
-        self.screen.blit(exit_surface, exit_rect)
-
-    def _draw_pause(self) -> None:
-        """Dibuja una capa de pausa sobre la partida congelada."""
-
-        self._draw_overlay()
-
-        pause_surface = self.title_font.render(
-            "PAUSA",
-            True,
-            ACCENT_COLOR,
-        )
-        pause_rect = pause_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 25)
-        )
-        self.screen.blit(pause_surface, pause_rect)
-
-        continue_surface = self.small_font.render(
-            "Pulsa Esc para continuar  |  Cierra la ventana para salir",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        continue_rect = continue_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 35)
-        )
-        self.screen.blit(continue_surface, continue_rect)
-
-    def _draw_overlay(self) -> None:
-        """Oscurece la partida para destacar una pantalla superpuesta."""
-
-        # La transparencia conserva el contexto visual de la partida.
-        overlay = pygame.Surface(
-            (WINDOW_WIDTH, WINDOW_HEIGHT),
-            pygame.SRCALPHA,
-        )
-        overlay.fill(GAME_OVER_OVERLAY_COLOR)
-        self.screen.blit(overlay, (0, 0))

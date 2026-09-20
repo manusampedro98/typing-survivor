@@ -67,6 +67,7 @@ typing-survivor/
 │   ├── save_manager.py  # Guardado local del mejor resultado
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
+│   ├── ui_renderer.py   # HUD, campo de escritura y pantallas superpuestas
 │   ├── wave_manager.py  # Oleadas y dificultad progresiva
 │   └── word_manager.py  # Carga y selección de palabras
 ├── .gitignore           # Archivos excluidos del repositorio
