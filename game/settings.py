@@ -113,13 +113,13 @@ MAX_COMBO_MULTIPLIER = 5
 # Los carriles se abren en abanico desde el jugador hacia la parte superior.
 # El orden alterna centro, izquierda y derecha para repartir las apariciones.
 ENEMY_LANE_START_POSITIONS = (
-    (640.0, 150.0),
-    (430.0, 140.0),
-    (850.0, 140.0),
-    (220.0, 155.0),
-    (1060.0, 155.0),
-    (60.0, 200.0),
-    (1220.0, 200.0),
+    (640.0, 210.0),
+    (430.0, 205.0),
+    (850.0, 205.0),
+    (220.0, 215.0),
+    (1060.0, 215.0),
+    (60.0, 245.0),
+    (1220.0, 245.0),
 )
 PLAYER_POSITION = (WINDOW_WIDTH / 2, 565.0)
 PLAYER_RADIUS = 32

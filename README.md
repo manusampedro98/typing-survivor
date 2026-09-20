@@ -56,6 +56,7 @@ typing-survivor/
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
 │   ├── armored_enemy.py # Variante resistente de dos palabras
+│   ├── battlefield_renderer.py # Dibujo del campo de batalla
 │   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── enemy_manager.py # Aparición, movimiento y selección de objetivos
 │   ├── enemy_type.py    # Identificadores de las variantes enemigas

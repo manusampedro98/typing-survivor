@@ -4,6 +4,7 @@ from collections import Counter
 
 import pygame
 
+from game.battlefield_renderer import BattlefieldRenderer
 from game.enemy import Enemy
 from game.enemy_manager import EnemyManager
 from game.enemy_type import EnemyType
@@ -19,8 +20,6 @@ from game.settings import (
     CARET_HEIGHT,
     CARET_WIDTH,
     CONTROL_INPUT_BLOCK_DURATION,
-    CORRECT_COLOR,
-    ENEMY_LANE_START_POSITIONS,
     FPS,
     GAME_OVER_OVERLAY_COLOR,
     INCORRECT_COLOR,
@@ -30,15 +29,11 @@ from game.settings import (
     INPUT_HORIZONTAL_PADDING,
     KEY_REPEAT_DELAY,
     KEY_REPEAT_INTERVAL,
-    LANE_COLOR,
     MAX_COMBO_MULTIPLIER,
     MAX_INPUT_LENGTH,
     MUTED_TEXT_COLOR,
     PANEL_COLOR,
-    PLAYER_COLOR,
-    PLAYER_OUTLINE_COLOR,
     PLAYER_POSITION,
-    PLAYER_RADIUS,
     POINTS_PER_CHARACTER,
     SMALL_FONT_SIZE,
     STARTING_LIVES,
@@ -78,6 +73,14 @@ class Game:
         self.target_font = pygame.font.Font(None, TARGET_FONT_SIZE)
         self.body_font = pygame.font.Font(None, BODY_FONT_SIZE)
         self.small_font = pygame.font.Font(None, SMALL_FONT_SIZE)
+
+        # El renderizador concentra toda la presentación de la arena.
+        self.battlefield_renderer = BattlefieldRenderer(
+            screen=self.screen,
+            target_font=self.target_font,
+            body_font=self.body_font,
+            small_font=self.small_font,
+        )
 
         # Carga la lista y selecciona la primera palabra objetivo.
         self.word_manager = WordManager()
@@ -422,7 +425,12 @@ class Game:
         # Limpia el contenido del fotograma anterior.
         self.screen.fill(BACKGROUND_COLOR)
 
-        self._draw_battlefield()
+        self.battlefield_renderer.draw(
+            enemy_manager=self.enemy_manager,
+            active_enemy=self.active_enemy,
+            typed_text=self.typed_text,
+            effect_manager=self.effect_manager,
+        )
         self._draw_interface()
 
         if self.state is GameState.MENU:
@@ -438,8 +446,6 @@ class Game:
     def _draw_interface(self) -> None:
         """Dibuja la información y la zona de escritura."""
 
-        # Cada enemigo muestra su propia palabra y estado.
-        self._draw_enemy_words()
         self._draw_progress()
         self._draw_wave_progress()
 
@@ -521,133 +527,6 @@ class Game:
             center=(WINDOW_WIDTH // 2, input_box.top - 18)
         )
         self.screen.blit(help_surface, help_rect)
-
-    def _draw_enemy_words(self) -> None:
-        """Dibuja la palabra y el estado de cada enemigo visible."""
-
-        for enemy in self.enemy_manager.enemies:
-            self._draw_enemy_word(enemy)
-
-    def _draw_enemy_word(self, enemy: Enemy) -> None:
-        """Dibuja una palabra y resalta el progreso del objetivo activo."""
-
-        enemy_details = (
-            f"{enemy.enemy_type.display_name}"
-            f"  ·  x{enemy.score_multiplier} puntos"
-        )
-
-        if enemy.max_health > 1:
-            enemy_details += (
-                f"  ·  Escudo {enemy.health}/{enemy.max_health}"
-            )
-
-        if enemy is self.active_enemy:
-            enemy_details = f"▶  {enemy_details}"
-
-        type_surface = self.small_font.render(
-            enemy_details,
-            True,
-            enemy.label_color,
-        )
-        type_rect = type_surface.get_rect(
-            center=(
-                round(enemy.position.x),
-                max(75, round(enemy.position.y) - 82),
-            )
-        )
-        self.screen.blit(type_surface, type_rect)
-
-        character_surfaces = []
-
-        # Asigna un color a cada carácter según el progreso del jugador.
-        for index, character in enumerate(enemy.word):
-            if enemy is self.active_enemy and index < len(self.typed_text):
-                character_color = (
-                    CORRECT_COLOR
-                    if self.typed_text[index] == character
-                    else INCORRECT_COLOR
-                )
-            else:
-                character_color = TEXT_COLOR
-
-            character_surface = self.target_font.render(
-                character,
-                True,
-                character_color,
-            )
-            character_surfaces.append(character_surface)
-
-        # Calcula el ancho total para centrar la palabra completa.
-        total_width = sum(
-            surface.get_width()
-            for surface in character_surfaces
-        )
-
-        # Mantiene la palabra completa dentro de los límites de la ventana.
-        half_word_width = total_width // 2
-        word_center_x = max(
-            half_word_width + 20,
-            min(
-                round(enemy.position.x),
-                WINDOW_WIDTH - half_word_width - 20,
-            ),
-        )
-        character_x = word_center_x - half_word_width
-        word_center_y = max(105, round(enemy.position.y) - 47)
-
-        # Dibuja las letras una junto a otra conservando sus colores.
-        for character_surface in character_surfaces:
-            character_rect = character_surface.get_rect(
-                midleft=(character_x, word_center_y)
-            )
-            self.screen.blit(character_surface, character_rect)
-            character_x += character_surface.get_width()
-
-    def _draw_battlefield(self) -> None:
-        """Dibuja los carriles, los enemigos y la base provisional."""
-
-        lane_end = (
-            round(PLAYER_POSITION[0]),
-            round(PLAYER_POSITION[1]),
-        )
-
-        # Los carriles convergen visualmente en la posición del jugador.
-        for lane_start in ENEMY_LANE_START_POSITIONS:
-            pygame.draw.line(
-                self.screen,
-                LANE_COLOR,
-                (round(lane_start[0]), round(lane_start[1])),
-                lane_end,
-                width=3,
-            )
-
-        for enemy in self.enemy_manager.enemies:
-            enemy.draw(self.screen)
-
-        player_center = (
-            round(PLAYER_POSITION[0]),
-            round(PLAYER_POSITION[1]),
-        )
-        pygame.draw.circle(
-            self.screen,
-            PLAYER_OUTLINE_COLOR,
-            player_center,
-            PLAYER_RADIUS + 5,
-        )
-        pygame.draw.circle(
-            self.screen,
-            PLAYER_COLOR,
-            player_center,
-            PLAYER_RADIUS,
-        )
-
-        # La letra identifica temporalmente al jugador hasta añadir su sprite.
-        player_label = self.body_font.render("P", True, BACKGROUND_COLOR)
-        player_label_rect = player_label.get_rect(center=player_center)
-        self.screen.blit(player_label, player_label_rect)
-
-        # Los efectos se dibujan al final para permanecer visibles sobre la arena.
-        self.effect_manager.draw(self.screen, self.small_font)
 
     def _draw_progress(self) -> None:
         """Muestra la puntuación y el progreso de la sesión."""
