@@ -25,6 +25,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Enemigo móvil con velocidad independiente de los FPS.
 - Enemigos normales, rápidos y blindados con comportamientos diferentes.
 - Contador de enemigos eliminados desglosado por tipo.
+- Partículas y textos flotantes al atacar o recibir daño.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
 - Puntuación basada en la longitud de cada palabra.
@@ -57,6 +58,7 @@ typing-survivor/
 │   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── enemy_manager.py # Aparición, movimiento y selección de objetivos
 │   ├── enemy_type.py    # Identificadores de las variantes enemigas
+│   ├── effects.py       # Partículas y mensajes visuales temporales
 │   ├── fast_enemy.py    # Variante rápida con bonificación de puntos
 │   ├── game.py          # Controlador y bucle principal
 │   ├── game_state.py    # Estados principales de la aplicación

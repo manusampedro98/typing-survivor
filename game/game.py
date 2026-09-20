@@ -7,6 +7,7 @@ import pygame
 from game.enemy import Enemy
 from game.enemy_manager import EnemyManager
 from game.enemy_type import EnemyType
+from game.effects import EffectManager
 from game.game_state import GameState
 from game.settings import (
     ACCENT_COLOR,
@@ -91,6 +92,9 @@ class Game:
             self.word_manager,
             self.wave_manager,
         )
+
+        # Gestiona partículas y mensajes sin mezclarlos con las entidades.
+        self.effect_manager = EffectManager()
 
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
@@ -267,16 +271,25 @@ class Game:
 
         # El combo se actualiza antes de calcular los puntos del acierto.
         self.combo += 1
-        self.score += self._calculate_word_score(
+        awarded_points = self._calculate_word_score(
             completed_word,
             completed_enemy.score_multiplier,
         )
+        self.score += awarded_points
         self.completed_words += 1
         self.wave_manager.register_completed_word()
         self.typed_text = ""
         self.active_enemy = None
 
-        if completed_enemy.take_hit():
+        enemy_defeated = completed_enemy.take_hit()
+        self.effect_manager.create_enemy_feedback(
+            position=completed_enemy.position,
+            color=completed_enemy.label_color,
+            awarded_points=awarded_points,
+            defeated=enemy_defeated,
+        )
+
+        if enemy_defeated:
             self.defeated_enemies[completed_enemy.enemy_type] += 1
             self.enemy_manager.remove(completed_enemy)
         else:
@@ -325,6 +338,7 @@ class Game:
 
         self.enemy_manager.update(delta_time)
         self._handle_enemy_arrivals()
+        self.effect_manager.update(delta_time)
 
     def _handle_enemy_arrivals(self) -> None:
         """Resta vidas por cada enemigo que alcanza la base."""
@@ -332,6 +346,7 @@ class Game:
         reached_enemies = self.enemy_manager.reached_enemies()
 
         for enemy in reached_enemies:
+            self.effect_manager.create_player_damage(PLAYER_POSITION)
             self.enemy_manager.remove(enemy)
             self.missed_words += 1
             self.lives -= 1
@@ -365,6 +380,7 @@ class Game:
         self.typing_stats.reset()
         self.wave_manager.reset()
         self.enemy_manager.reset()
+        self.effect_manager.reset()
         self._reset_caret_blink()
         self._block_text_input()
 
@@ -612,6 +628,9 @@ class Game:
         player_label = self.body_font.render("P", True, BACKGROUND_COLOR)
         player_label_rect = player_label.get_rect(center=player_center)
         self.screen.blit(player_label, player_label_rect)
+
+        # Los efectos se dibujan al final para permanecer visibles sobre la arena.
+        self.effect_manager.draw(self.screen, self.small_font)
 
     def _draw_progress(self) -> None:
         """Muestra la puntuación y el progreso de la sesión."""
