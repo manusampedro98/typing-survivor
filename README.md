@@ -30,8 +30,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Récord persistente con puntuación, oleada, PPM y precisión.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
-- Puntuación basada en la longitud de cada palabra.
-- Combo de aciertos con multiplicador progresivo.
+- Puntuación basada en la longitud, el tipo de enemigo y el combo.
+- Combo de aciertos con multiplicador y barra de progreso visual.
 - Cálculo en tiempo real de PPM, precisión y errores de escritura.
 - Oleadas con aumento gradual y limitado de la velocidad enemiga.
 - Aviso animado de nueva oleada sin interrumpir la partida.

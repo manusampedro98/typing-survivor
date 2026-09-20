@@ -15,6 +15,7 @@ from game.settings import (
     PLAYER_OUTLINE_COLOR,
     PLAYER_POSITION,
     PLAYER_RADIUS,
+    POINTS_PER_CHARACTER,
     TEXT_COLOR,
     WINDOW_WIDTH,
 )
@@ -122,9 +123,15 @@ class BattlefieldRenderer:
     ) -> None:
         """Dibuja una palabra y resalta el progreso del objetivo activo."""
 
+        # La recompensa base explica la diferencia entre palabras cortas y largas.
+        base_points = (
+            len(enemy.word)
+            * POINTS_PER_CHARACTER
+            * enemy.score_multiplier
+        )
         enemy_details = (
             f"{enemy.enemy_type.display_name}"
-            f"  ·  x{enemy.score_multiplier} puntos"
+            f"  ·  {base_points} pts base"
         )
 
         if enemy.max_health > 1:

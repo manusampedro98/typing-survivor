@@ -327,8 +327,25 @@ class Game:
     def _get_combo_multiplier(self) -> int:
         """Devuelve el multiplicador actual dentro del límite permitido."""
 
+        if self.combo <= 0:
+            return 1
+
         multiplier = 1 + (self.combo - 1) // WORDS_PER_MULTIPLIER_LEVEL
         return min(multiplier, MAX_COMBO_MULTIPLIER)
+
+    def _get_combo_progress(self) -> float:
+        """Calcula el llenado hacia el siguiente multiplicador."""
+
+        if self.combo <= 0:
+            return 0.0
+
+        if self._get_combo_multiplier() >= MAX_COMBO_MULTIPLIER:
+            return 1.0
+
+        words_in_level = (
+            (self.combo - 1) % WORDS_PER_MULTIPLIER_LEVEL
+        ) + 1
+        return words_in_level / WORDS_PER_MULTIPLIER_LEVEL
 
     def _update(self, delta_time: float) -> None:
         """Actualiza el cursor, las apariciones y los enemigos."""
@@ -397,6 +414,9 @@ class Game:
     def _start_new_game(self) -> None:
         """Restablece el progreso y comienza una partida nueva."""
 
+        # La primera partida reutiliza exactamente el enemigo visto en el menú.
+        preserve_menu_enemy = self.state is GameState.MENU
+
         self.completed_words = 0
         self.missed_words = 0
         self.lives = STARTING_LIVES
@@ -408,7 +428,9 @@ class Game:
         self.active_enemy = None
         self.typing_stats.reset()
         self.wave_manager.reset()
-        self.enemy_manager.reset()
+        self.enemy_manager.reset(
+            preserve_first_enemy=preserve_menu_enemy,
+        )
         self.effect_manager.reset()
         self._start_countdown()
 
@@ -457,9 +479,7 @@ class Game:
             typed_text=self.typed_text,
             effect_manager=self.effect_manager,
         )
-        combo_multiplier = (
-            self._get_combo_multiplier() if self.combo > 0 else 1
-        )
+        combo_multiplier = self._get_combo_multiplier()
         self.ui_renderer.draw_interface(
             typed_text=self.typed_text,
             caret_visible=self.caret_visible,
@@ -467,6 +487,7 @@ class Game:
             high_score=self.save_manager.high_score,
             combo=self.combo,
             combo_multiplier=combo_multiplier,
+            combo_progress=self._get_combo_progress(),
             lives=self.lives,
             typing_stats=self.typing_stats,
             wave_manager=self.wave_manager,

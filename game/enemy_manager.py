@@ -29,8 +29,14 @@ class EnemyManager:
         self.spawn_elapsed = 0.0
         self.next_lane_index = 0
 
-    def reset(self) -> None:
-        """Elimina los enemigos anteriores y crea el primero."""
+    def reset(self, preserve_first_enemy: bool = False) -> None:
+        """Prepara el primer enemigo de una partida nueva."""
+
+        if preserve_first_enemy and len(self.enemies) == 1:
+            # El enemigo del menú ya ocupa el carril central y no se ha movido.
+            self.spawn_elapsed = 0.0
+            self.next_lane_index = 1
+            return
 
         self.enemies.clear()
         self.spawn_elapsed = 0.0

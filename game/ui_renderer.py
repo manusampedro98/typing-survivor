@@ -13,12 +13,15 @@ from game.settings import (
     BORDER_COLOR,
     CARET_HEIGHT,
     CARET_WIDTH,
+    COMBO_BAR_HEIGHT,
+    COMBO_BAR_WIDTH,
     GAME_OVER_OVERLAY_COLOR,
     INCORRECT_COLOR,
     INPUT_BOX_CENTER_Y,
     INPUT_BOX_HEIGHT,
     INPUT_BOX_WIDTH,
     INPUT_HORIZONTAL_PADDING,
+    MAX_COMBO_MULTIPLIER,
     MUTED_TEXT_COLOR,
     PANEL_COLOR,
     TEXT_COLOR,
@@ -55,6 +58,7 @@ class UIRenderer:
         high_score: HighScore,
         combo: int,
         combo_multiplier: int,
+        combo_progress: float,
         lives: int,
         typing_stats: TypingStats,
         wave_manager: WaveManager,
@@ -67,6 +71,7 @@ class UIRenderer:
             high_score=high_score,
             combo=combo,
             combo_multiplier=combo_multiplier,
+            combo_progress=combo_progress,
             lives=lives,
             typing_stats=typing_stats,
         )
@@ -178,6 +183,7 @@ class UIRenderer:
         high_score: HighScore,
         combo: int,
         combo_multiplier: int,
+        combo_progress: float,
         lives: int,
         typing_stats: TypingStats,
     ) -> None:
@@ -211,6 +217,80 @@ class UIRenderer:
             topright=(WINDOW_WIDTH - 30, progress_rect.bottom + 8)
         )
         self.screen.blit(typing_surface, typing_rect)
+
+        self._draw_combo_bar(
+            top=typing_rect.bottom + 8,
+            combo_multiplier=combo_multiplier,
+            combo_progress=combo_progress,
+        )
+
+    def _draw_combo_bar(
+        self,
+        top: int,
+        combo_multiplier: int,
+        combo_progress: float,
+    ) -> None:
+        """Representa el avance hacia el siguiente multiplicador."""
+
+        maximum_reached = combo_multiplier >= MAX_COMBO_MULTIPLIER
+
+        if maximum_reached:
+            label = f"COMBO MÁXIMO  x{MAX_COMBO_MULTIPLIER}"
+        else:
+            label = f"Próximo multiplicador: x{combo_multiplier + 1}"
+
+        label_surface = self.small_font.render(
+            label,
+            True,
+            ACCENT_COLOR if maximum_reached else MUTED_TEXT_COLOR,
+        )
+        label_rect = label_surface.get_rect(
+            topright=(WINDOW_WIDTH - 30, top)
+        )
+        self.screen.blit(label_surface, label_rect)
+
+        # En el nivel máximo no existe otra meta que representar con una barra.
+        if maximum_reached:
+            return
+
+        bar_rect = pygame.Rect(
+            0,
+            label_rect.bottom + 4,
+            COMBO_BAR_WIDTH,
+            COMBO_BAR_HEIGHT,
+        )
+        bar_rect.right = WINDOW_WIDTH - 30
+        pygame.draw.rect(
+            self.screen,
+            PANEL_COLOR,
+            bar_rect,
+            border_radius=6,
+        )
+        pygame.draw.rect(
+            self.screen,
+            BORDER_COLOR,
+            bar_rect,
+            width=2,
+            border_radius=6,
+        )
+
+        # El relleno se limita para mantener el dibujo dentro del borde.
+        normalized_progress = max(0.0, min(1.0, combo_progress))
+        fill_width = round((COMBO_BAR_WIDTH - 4) * normalized_progress)
+
+        if fill_width > 0:
+            fill_rect = pygame.Rect(
+                bar_rect.left + 2,
+                bar_rect.top + 2,
+                fill_width,
+                COMBO_BAR_HEIGHT - 4,
+            )
+            pygame.draw.rect(
+                self.screen,
+                ACCENT_COLOR,
+                fill_rect,
+                border_radius=4,
+            )
 
     def _draw_wave_progress(
         self,

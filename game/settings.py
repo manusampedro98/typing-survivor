@@ -112,6 +112,8 @@ ARMORED_ENEMY_HEALTH = 2
 POINTS_PER_CHARACTER = 10
 WORDS_PER_MULTIPLIER_LEVEL = 3
 MAX_COMBO_MULTIPLIER = 5
+COMBO_BAR_WIDTH = 260
+COMBO_BAR_HEIGHT = 12
 
 # Los carriles se abren en abanico desde el jugador hacia la parte superior.
 # El orden alterna centro, izquierda y derecha para repartir las apariciones.
