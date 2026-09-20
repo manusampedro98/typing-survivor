@@ -4,6 +4,7 @@ from collections import Counter
 
 import pygame
 
+from game.audio_manager import AudioManager
 from game.battlefield_renderer import BattlefieldRenderer
 from game.enemy import Enemy
 from game.enemy_manager import EnemyManager
@@ -13,6 +14,7 @@ from game.game_state import GameState
 from game.power_up_manager import PowerUpManager
 from game.save_manager import SaveManager
 from game.settings import (
+    AUDIO_VOLUME_STEP,
     BACKGROUND_COLOR,
     BODY_FONT_SIZE,
     CARET_BLINK_INTERVAL,
@@ -107,6 +109,10 @@ class Game:
 
         # Gestiona las cargas y los efectos temporales de los power-ups.
         self.power_up_manager = PowerUpManager()
+
+        # Centraliza la música, los efectos y los controles de volumen.
+        self.audio_manager = AudioManager()
+        self.audio_manager.start_music()
 
         # Carga el récord guardado fuera del repositorio del proyecto.
         self.save_manager = SaveManager()
@@ -210,6 +216,26 @@ class Game:
             # Durante la derrota, R comienza una partida nueva.
             if event.key == pygame.K_r:
                 self._start_new_game()
+
+        elif self.state is GameState.PAUSED:
+            # El audio solo se modifica desde el menú de pausa.
+            if event.key in (pygame.K_LEFT, pygame.K_MINUS, pygame.K_KP_MINUS):
+                self.audio_manager.change_volume(-AUDIO_VOLUME_STEP)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (
+                pygame.K_RIGHT,
+                pygame.K_PLUS,
+                pygame.K_EQUALS,
+                pygame.K_KP_PLUS,
+            ):
+                self.audio_manager.change_volume(AUDIO_VOLUME_STEP)
+                self.audio_manager.play("menu_adjust")
+            elif event.key == pygame.K_m:
+                self.audio_manager.toggle_mute()
+
+                # Al recuperar el sonido ofrece una confirmación audible.
+                if not self.audio_manager.muted:
+                    self.audio_manager.play("menu_adjust")
 
         elif self.state is GameState.PLAYING:
             power_up_keys = {
@@ -320,6 +346,7 @@ class Game:
             self.effect_manager.create_wave_announcement(
                 self.wave_manager.current_wave
             )
+            self.audio_manager.play("wave_start")
         self.typed_text = ""
         self.active_enemy = None
 
@@ -332,9 +359,11 @@ class Game:
         )
 
         if enemy_defeated:
+            self.audio_manager.play("enemy_defeat")
             self.defeated_enemies[completed_enemy.enemy_type] += 1
 
             if self.power_up_manager.try_grant_slow_charge():
+                self.audio_manager.play("power_up_ready")
                 self.effect_manager.create_power_up_feedback(
                     completed_enemy.position,
                     "RALENTIZACIÓN LISTA",
@@ -343,6 +372,7 @@ class Game:
             self.enemy_manager.remove(completed_enemy)
         else:
             # El blindado conserva su posición y recibe un nuevo objetivo.
+            self.audio_manager.play("enemy_hit")
             self.enemy_manager.replace_word(completed_enemy)
 
         self.enemy_manager.ensure_enemy()
@@ -422,6 +452,7 @@ class Game:
             return
 
         if self.power_up_manager.activate_slow():
+            self.audio_manager.play("power_up_activate")
             self.effect_manager.create_power_up_feedback(
                 PLAYER_POSITION,
                 "TIEMPO RALENTIZADO",
@@ -446,6 +477,7 @@ class Game:
         reached_enemies = self.enemy_manager.reached_enemies()
 
         for enemy in reached_enemies:
+            self.audio_manager.play("player_damage")
             self.effect_manager.create_player_damage(PLAYER_POSITION)
             self.enemy_manager.remove(enemy)
             self.missed_words += 1
@@ -488,6 +520,7 @@ class Game:
         )
         self.effect_manager.reset()
         self.power_up_manager.reset()
+        self.audio_manager.play("game_start")
         self._start_countdown()
 
     def _start_countdown(self) -> None:
@@ -501,6 +534,7 @@ class Game:
     def _finish_game(self) -> None:
         """Compara el resultado final con el récord almacenado."""
 
+        self.audio_manager.play("game_over")
         self.is_new_high_score = self.save_manager.update_high_score(
             score=self.score,
             wave=self.wave_manager.current_wave,
@@ -576,6 +610,8 @@ class Game:
             wave_manager=self.wave_manager,
             defeated_enemies=self.defeated_enemies,
             typing_stats=self.typing_stats,
+            audio_volume=self.audio_manager.volume,
+            audio_muted=self.audio_manager.muted,
         )
 
         # El aviso queda sobre el HUD sin bloquear ni pausar la acción.

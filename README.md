@@ -17,6 +17,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Campo de escritura con cursor parpadeante.
 - Ventana redimensionable con escalado proporcional de la interfaz.
 - Menú inicial y pausa durante la partida.
+- Música ambiental y efectos de sonido para las acciones principales.
+- Control de volumen y silencio desde el menú de pausa.
 - Cuenta atrás antes de empezar y después de reanudar la partida.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
 - Palabras objetivo cargadas desde un archivo externo.
@@ -60,6 +62,7 @@ typing-survivor/
 │   └── words.txt        # Palabras disponibles durante la partida
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
+│   ├── audio_manager.py # Música, efectos, volumen y silencio
 │   ├── armored_enemy.py # Variante resistente de dos palabras
 │   ├── battlefield_renderer.py # Dibujo del campo de batalla
 │   ├── enemy.py         # Movimiento y representación del enemigo
@@ -112,7 +115,8 @@ alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
 reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
 Retroceso, activar una ralentización disponible con `1` y pausar o reanudar con
-`Esc`. Desde el menú y la pantalla final, `Esc` cierra
+`Esc`. Durante la pausa, las flechas izquierda y derecha ajustan el volumen y
+`M` activa o desactiva el silencio. Desde el menú y la pantalla final, `Esc` cierra
 el juego; el botón de la ventana permite cerrarlo en cualquier momento. Las PPM se
 calculan desde la primera tecla escrita y la precisión compara cada intento con el
 carácter esperado.

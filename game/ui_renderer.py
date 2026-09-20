@@ -109,6 +109,8 @@ class UIRenderer:
         wave_manager: WaveManager,
         defeated_enemies: Counter[EnemyType],
         typing_stats: TypingStats,
+        audio_volume: float,
+        audio_muted: bool,
     ) -> None:
         """Dibuja la pantalla superpuesta que corresponde al estado actual."""
 
@@ -117,7 +119,7 @@ class UIRenderer:
         elif state is GameState.COUNTDOWN:
             self._draw_countdown(countdown_remaining)
         elif state is GameState.PAUSED:
-            self._draw_pause()
+            self._draw_pause(audio_volume, audio_muted)
         elif state is GameState.GAME_OVER:
             self._draw_game_over(
                 high_score=high_score,
@@ -641,7 +643,7 @@ class UIRenderer:
         )
         self.screen.blit(exit_surface, exit_rect)
 
-    def _draw_pause(self) -> None:
+    def _draw_pause(self, audio_volume: float, audio_muted: bool) -> None:
         """Dibuja una capa de pausa sobre la partida congelada."""
 
         self._draw_overlay()
@@ -652,17 +654,77 @@ class UIRenderer:
             ACCENT_COLOR,
         )
         pause_rect = pause_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 25)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 120)
         )
         self.screen.blit(pause_surface, pause_rect)
 
+        volume_text = (
+            "SILENCIADO"
+            if audio_muted
+            else f"VOLUMEN: {round(audio_volume * 100)}%"
+        )
+        volume_surface = self.body_font.render(
+            volume_text,
+            True,
+            MUTED_TEXT_COLOR if audio_muted else TEXT_COLOR,
+        )
+        volume_rect = volume_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 35)
+        )
+        self.screen.blit(volume_surface, volume_rect)
+
+        # La barra ofrece una lectura visual inmediata del volumen elegido.
+        bar_width = 320
+        bar_height = 14
+        bar_rect = pygame.Rect(0, 0, bar_width, bar_height)
+        bar_rect.center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 15)
+        pygame.draw.rect(
+            self.screen,
+            PANEL_COLOR,
+            bar_rect,
+            border_radius=bar_height // 2,
+        )
+        pygame.draw.rect(
+            self.screen,
+            BORDER_COLOR,
+            bar_rect,
+            width=2,
+            border_radius=bar_height // 2,
+        )
+
+        filled_width = round((bar_width - 4) * audio_volume)
+
+        if filled_width > 0:
+            filled_rect = pygame.Rect(
+                bar_rect.left + 2,
+                bar_rect.top + 2,
+                filled_width,
+                bar_height - 4,
+            )
+            pygame.draw.rect(
+                self.screen,
+                MUTED_TEXT_COLOR if audio_muted else ACCENT_COLOR,
+                filled_rect,
+                border_radius=(bar_height - 4) // 2,
+            )
+
+        controls_surface = self.small_font.render(
+            "Izquierda / Derecha: volumen  |  M: silenciar",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        controls_rect = controls_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 65)
+        )
+        self.screen.blit(controls_surface, controls_rect)
+
         continue_surface = self.small_font.render(
-            "Pulsa Esc para continuar  |  Cierra la ventana para salir",
+            "Esc: continuar",
             True,
             MUTED_TEXT_COLOR,
         )
         continue_rect = continue_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 35)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 105)
         )
         self.screen.blit(continue_surface, continue_rect)
 

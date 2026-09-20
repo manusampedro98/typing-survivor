@@ -16,6 +16,11 @@ FPS = 60
 # Tiempo de preparación antes de iniciar o reanudar la acción.
 COUNTDOWN_DURATION = 3.0
 
+# El volumen se controla desde la pausa en pasos del diez por ciento.
+DEFAULT_AUDIO_VOLUME = 0.6
+AUDIO_VOLUME_STEP = 0.1
+MUSIC_VOLUME_MULTIPLIER = 0.35
+
 
 # Paleta principal de la interfaz en formato RGB.
 BACKGROUND_COLOR = (16, 18, 27)
