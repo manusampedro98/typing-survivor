@@ -34,6 +34,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Combo de aciertos con multiplicador progresivo.
 - Cálculo en tiempo real de PPM, precisión y errores de escritura.
 - Oleadas con aumento gradual y limitado de la velocidad enemiga.
+- Aviso animado de nueva oleada sin interrumpir la partida.
 - Pantalla de fin de partida con reinicio mediante la tecla R.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 

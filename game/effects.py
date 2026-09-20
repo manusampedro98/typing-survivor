@@ -6,7 +6,7 @@ from random import uniform
 
 import pygame
 
-from game.settings import INCORRECT_COLOR
+from game.settings import ACCENT_COLOR, INCORRECT_COLOR
 
 
 @dataclass
@@ -84,6 +84,73 @@ class FloatingText:
         surface.blit(text_surface, text_rect)
 
 
+@dataclass
+class WaveAnnouncement:
+    """Texto animado que comunica el comienzo de una nueva oleada."""
+
+    wave_number: int
+    lifetime: float = 2.2
+    age: float = 0.0
+
+    @property
+    def is_alive(self) -> bool:
+        """Indica si la animación debe continuar visible."""
+
+        return self.age < self.lifetime
+
+    def update(self, delta_time: float) -> None:
+        """Avanza el tiempo de la animación sin detener la partida."""
+
+        self.age += delta_time
+
+    def draw(
+        self,
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+    ) -> None:
+        """Aplica escala, desplazamiento y transparencia al texto."""
+
+        progress = min(1.0, self.age / self.lifetime)
+        scale = 1.0
+        vertical_offset = 0
+
+        if progress < 0.18:
+            # La entrada asciende mientras aumenta desde el 75 % de su tamaño.
+            entrance_progress = progress / 0.18
+            alpha = round(255 * entrance_progress)
+            scale = 0.75 + 0.25 * entrance_progress
+            vertical_offset = round(30 * (1.0 - entrance_progress))
+        elif progress > 0.72:
+            # La salida invierte el recorrido y baja mientras se desvanece.
+            exit_progress = (progress - 0.72) / 0.28
+            alpha = round(255 * (1.0 - exit_progress))
+            vertical_offset = round(30 * exit_progress)
+        else:
+            alpha = 255
+
+        text_surface = font.render(
+            f"OLEADA {self.wave_number}",
+            True,
+            ACCENT_COLOR,
+        )
+        scaled_size = (
+            max(1, round(text_surface.get_width() * scale)),
+            max(1, round(text_surface.get_height() * scale)),
+        )
+        text_surface = pygame.transform.smoothscale(
+            text_surface,
+            scaled_size,
+        )
+        text_surface.set_alpha(alpha)
+        text_rect = text_surface.get_rect(
+            center=(
+                surface.get_width() // 2,
+                round(surface.get_height() * 0.42) + vertical_offset,
+            )
+        )
+        surface.blit(text_surface, text_rect)
+
+
 class EffectManager:
     """Crea, actualiza y dibuja todos los efectos temporales."""
 
@@ -92,6 +159,12 @@ class EffectManager:
 
         self.particles: list[Particle] = []
         self.floating_texts: list[FloatingText] = []
+        self.wave_announcement: WaveAnnouncement | None = None
+
+    def create_wave_announcement(self, wave_number: int) -> None:
+        """Inicia el aviso de la nueva oleada."""
+
+        self.wave_announcement = WaveAnnouncement(wave_number)
 
     def create_enemy_feedback(
         self,
@@ -152,6 +225,8 @@ class EffectManager:
             particle.update(delta_time)
         for floating_text in self.floating_texts:
             floating_text.update(delta_time)
+        if self.wave_announcement is not None:
+            self.wave_announcement.update(delta_time)
 
         self.particles = [
             particle
@@ -163,6 +238,12 @@ class EffectManager:
             for floating_text in self.floating_texts
             if floating_text.is_alive
         ]
+
+        if (
+            self.wave_announcement is not None
+            and not self.wave_announcement.is_alive
+        ):
+            self.wave_announcement = None
 
     def draw(
         self,
@@ -176,11 +257,22 @@ class EffectManager:
         for floating_text in self.floating_texts:
             floating_text.draw(surface, font)
 
+    def draw_wave_announcement(
+        self,
+        surface: pygame.Surface,
+        font: pygame.font.Font,
+    ) -> None:
+        """Dibuja el aviso por encima de la interfaz cuando está activo."""
+
+        if self.wave_announcement is not None:
+            self.wave_announcement.draw(surface, font)
+
     def reset(self) -> None:
         """Elimina todos los efectos de la partida anterior."""
 
         self.particles.clear()
         self.floating_texts.clear()
+        self.wave_announcement = None
 
     def _create_burst(
         self,

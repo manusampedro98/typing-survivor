@@ -91,14 +91,17 @@ class WaveManager:
             MAX_SIMULTANEOUS_ENEMIES,
         )
 
-    def register_completed_word(self) -> None:
-        """Avanza de oleada al alcanzar el número de palabras requerido."""
+    def register_completed_word(self) -> bool:
+        """Registra el avance e indica si acaba de comenzar otra oleada."""
 
         self.completed_words_in_wave += 1
 
         if self.completed_words_in_wave >= WORDS_PER_WAVE:
             self.current_wave += 1
             self.completed_words_in_wave = 0
+            return True
+
+        return False
 
     def reset(self) -> None:
         """Restablece la progresión para comenzar una partida nueva."""

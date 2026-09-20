@@ -283,7 +283,12 @@ class Game:
         )
         self.score += awarded_points
         self.completed_words += 1
-        self.wave_manager.register_completed_word()
+        wave_changed = self.wave_manager.register_completed_word()
+
+        if wave_changed:
+            self.effect_manager.create_wave_announcement(
+                self.wave_manager.current_wave
+            )
         self.typed_text = ""
         self.active_enemy = None
 
@@ -478,6 +483,13 @@ class Game:
             defeated_enemies=self.defeated_enemies,
             typing_stats=self.typing_stats,
         )
+
+        # El aviso queda sobre el HUD sin bloquear ni pausar la acción.
+        if self.state is GameState.PLAYING:
+            self.effect_manager.draw_wave_announcement(
+                self.screen,
+                self.title_font,
+            )
 
         # Muestra en pantalla todo lo dibujado durante este fotograma.
         pygame.display.flip()
