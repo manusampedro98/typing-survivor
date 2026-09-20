@@ -1,8 +1,13 @@
 """Controlador principal de Typing Survivor."""
 
+from collections import Counter
+from random import random
+
 import pygame
 
 from game.enemy import Enemy
+from game.enemy_type import EnemyType
+from game.fast_enemy import FastEnemy
 from game.game_state import GameState
 from game.settings import (
     ACCENT_COLOR,
@@ -87,6 +92,9 @@ class Game:
         self.lives = STARTING_LIVES
         self.score = 0
         self.combo = 0
+
+        # Counter permite añadir nuevos tipos sin crear contadores separados.
+        self.defeated_enemies: Counter[EnemyType] = Counter()
         self.state = GameState.MENU
 
         # Crea el primer enemigo asociado a la palabra seleccionada.
@@ -234,8 +242,10 @@ class Game:
         # El combo se actualiza antes de calcular los puntos del acierto.
         self.combo += 1
         self.score += self._calculate_word_score(
-            self.word_manager.current_word
+            self.word_manager.current_word,
+            self.enemy.score_multiplier,
         )
+        self.defeated_enemies[self.enemy.enemy_type] += 1
         self.completed_words += 1
         self.wave_manager.register_completed_word()
         self.word_manager.next_word()
@@ -243,11 +253,19 @@ class Game:
         self.enemy = self._create_enemy()
         self._reset_caret_blink()
 
-    def _calculate_word_score(self, word: str) -> int:
+    def _calculate_word_score(
+        self,
+        word: str,
+        enemy_multiplier: int,
+    ) -> int:
         """Calcula los puntos de una palabra según su longitud y combo."""
 
         base_score = len(word) * POINTS_PER_CHARACTER
-        return base_score * self._get_combo_multiplier()
+        return (
+            base_score
+            * self._get_combo_multiplier()
+            * enemy_multiplier
+        )
 
     def _get_combo_multiplier(self) -> int:
         """Devuelve el multiplicador actual dentro del límite permitido."""
@@ -258,7 +276,14 @@ class Game:
     def _create_enemy(self) -> Enemy:
         """Crea un enemigo vinculado con la palabra objetivo actual."""
 
-        return Enemy(
+        # La oleada determina si puede aparecer la variante rápida.
+        enemy_class = (
+            FastEnemy
+            if random() < self.wave_manager.fast_enemy_chance
+            else Enemy
+        )
+
+        return enemy_class(
             word=self.word_manager.current_word,
             start_position=ENEMY_START_POSITION,
             target_position=PLAYER_POSITION,
@@ -311,6 +336,7 @@ class Game:
         self.lives = STARTING_LIVES
         self.score = 0
         self.combo = 0
+        self.defeated_enemies.clear()
         self.state = GameState.PLAYING
         self.typed_text = ""
         self.typing_stats.reset()
@@ -465,6 +491,22 @@ class Game:
     def _draw_target_word(self) -> None:
         """Dibuja la palabra objetivo y compara cada carácter escrito."""
 
+        type_surface = self.small_font.render(
+            (
+                f"{self.enemy.enemy_type.display_name}"
+                f"  ·  x{self.enemy.score_multiplier} puntos"
+            ),
+            True,
+            self.enemy.label_color,
+        )
+        type_rect = type_surface.get_rect(
+            center=(
+                round(self.enemy.position.x),
+                round(self.enemy.position.y) - 98,
+            )
+        )
+        self.screen.blit(type_surface, type_rect)
+
         character_surfaces = []
 
         # Asigna un color a cada carácter según el progreso del jugador.
@@ -607,6 +649,27 @@ class Game:
         )
         self.screen.blit(progress_surface, progress_rect)
 
+        defeated_surface = self.small_font.render(
+            self._get_enemy_defeat_summary(),
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        defeated_rect = defeated_surface.get_rect(
+            topleft=(30, progress_rect.bottom + 5)
+        )
+        self.screen.blit(defeated_surface, defeated_rect)
+
+    def _get_enemy_defeat_summary(self) -> str:
+        """Construye el resumen de enemigos eliminados por tipo."""
+
+        return "  |  ".join(
+            (
+                f"{enemy_type.plural_name}: "
+                f"{self.defeated_enemies[enemy_type]}"
+            )
+            for enemy_type in EnemyType
+        )
+
     def _draw_game_over(self) -> None:
         """Dibuja una capa de derrota con las opciones disponibles."""
 
@@ -636,6 +699,16 @@ class Game:
         )
         self.screen.blit(result_surface, result_rect)
 
+        defeated_surface = self.small_font.render(
+            f"Eliminados  |  {self._get_enemy_defeat_summary()}",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        defeated_rect = defeated_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 50)
+        )
+        self.screen.blit(defeated_surface, defeated_rect)
+
         stats_surface = self.small_font.render(
             (
                 f"PPM: {self.typing_stats.words_per_minute:.1f}"
@@ -646,7 +719,7 @@ class Game:
             MUTED_TEXT_COLOR,
         )
         stats_rect = stats_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 55)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 85)
         )
         self.screen.blit(stats_surface, stats_rect)
 
@@ -656,7 +729,7 @@ class Game:
             MUTED_TEXT_COLOR,
         )
         restart_rect = restart_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 130)
         )
         self.screen.blit(restart_surface, restart_rect)
 

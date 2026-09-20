@@ -21,6 +21,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Comparación visual de caracteres correctos e incorrectos.
 - Selección automática de una nueva palabra al completar la actual.
 - Enemigo móvil con velocidad independiente de los FPS.
+- Enemigos normales y rápidos con apariencia y recompensa diferentes.
+- Contador de enemigos eliminados desglosado por tipo.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
 - Puntuación basada en la longitud de cada palabra.
@@ -50,6 +52,8 @@ typing-survivor/
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
 │   ├── enemy.py         # Movimiento y representación del enemigo
+│   ├── enemy_type.py    # Identificadores de las variantes enemigas
+│   ├── fast_enemy.py    # Variante rápida con bonificación de puntos
 │   ├── game.py          # Controlador y bucle principal
 │   ├── game_state.py    # Estados principales de la aplicación
 │   ├── settings.py      # Configuración visual y general
@@ -95,4 +99,5 @@ el juego; el botón de la ventana permite cerrarlo en cualquier momento. Las PPM
 calculan desde la primera tecla escrita y la precisión compara cada intento con el
 carácter esperado.
 Cada cinco palabras completadas comienza una nueva oleada y aumenta la velocidad de
-los enemigos hasta alcanzar el límite configurado.
+los enemigos hasta alcanzar el límite configurado. Desde la segunda oleada pueden
+aparecer enemigos rápidos, que conceden el doble de puntos.

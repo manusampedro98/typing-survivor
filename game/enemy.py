@@ -2,6 +2,7 @@
 
 import pygame
 
+from game.enemy_type import EnemyType
 from game.settings import (
     ENEMY_COLOR,
     ENEMY_CORE_COLOR,
@@ -29,6 +30,11 @@ class Enemy:
         self.target_position = pygame.Vector2(target_position)
         self.speed = speed
         self.radius = ENEMY_RADIUS
+
+        # Estos datos permiten mostrar y premiar distintos tipos de enemigo.
+        self.enemy_type = EnemyType.NORMAL
+        self.score_multiplier = 1
+        self.label_color = ENEMY_COLOR
 
     def update(self, delta_time: float) -> None:
         """Avanza hacia el objetivo de forma independiente de los FPS."""
