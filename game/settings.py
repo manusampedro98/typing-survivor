@@ -48,8 +48,8 @@ KEY_REPEAT_DELAY = 350
 # El intervalo determina los milisegundos entre repeticiones.
 KEY_REPEAT_INTERVAL = 45
 
-# Tiempo durante el que se ignora la tecla usada para reiniciar la partida.
-RESTART_INPUT_BLOCK_DURATION = 150
+# Tiempo durante el que se ignora una tecla usada como control del juego.
+CONTROL_INPUT_BLOCK_DURATION = 150
 
 # Separación horizontal entre el texto y el borde del panel.
 INPUT_HORIZONTAL_PADDING = 24

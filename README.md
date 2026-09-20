@@ -15,6 +15,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 
 - Entrada de texto compatible con la distribución del teclado.
 - Campo de escritura con cursor parpadeante.
+- Menú inicial y pausa durante la partida.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
 - Palabras objetivo cargadas desde un archivo externo.
 - Comparación visual de caracteres correctos e incorrectos.
@@ -50,6 +51,7 @@ typing-survivor/
 │   ├── __init__.py      # Define el paquete del juego
 │   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── game.py          # Controlador y bucle principal
+│   ├── game_state.py    # Estados principales de la aplicación
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
 │   ├── wave_manager.py  # Oleadas y dificultad progresiva
@@ -88,7 +90,9 @@ se marcará según coincida con su palabra y, al completar el objetivo, el enemi
 reemplazado. Si alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
 reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
-Retroceso y cerrar mediante Escape o el botón de la ventana. Las PPM se calculan desde
-la primera tecla escrita y la precisión compara cada intento con el carácter esperado.
+Retroceso y pausar o reanudar con `Esc`. Desde el menú y la pantalla final, `Esc` cierra
+el juego; el botón de la ventana permite cerrarlo en cualquier momento. Las PPM se
+calculan desde la primera tecla escrita y la precisión compara cada intento con el
+carácter esperado.
 Cada cinco palabras completadas comienza una nueva oleada y aumenta la velocidad de
 los enemigos hasta alcanzar el límite configurado.

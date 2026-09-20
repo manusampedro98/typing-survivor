@@ -3,6 +3,7 @@
 import pygame
 
 from game.enemy import Enemy
+from game.game_state import GameState
 from game.settings import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
@@ -12,6 +13,7 @@ from game.settings import (
     CARET_BLINK_INTERVAL,
     CARET_HEIGHT,
     CARET_WIDTH,
+    CONTROL_INPUT_BLOCK_DURATION,
     CORRECT_COLOR,
     ENEMY_START_POSITION,
     FPS,
@@ -31,7 +33,6 @@ from game.settings import (
     PLAYER_POSITION,
     PLAYER_RADIUS,
     POINTS_PER_CHARACTER,
-    RESTART_INPUT_BLOCK_DURATION,
     SMALL_FONT_SIZE,
     STARTING_LIVES,
     TARGET_FONT_SIZE,
@@ -86,7 +87,7 @@ class Game:
         self.lives = STARTING_LIVES
         self.score = 0
         self.combo = 0
-        self.game_over = False
+        self.state = GameState.MENU
 
         # Crea el primer enemigo asociado a la palabra seleccionada.
         self.enemy = self._create_enemy()
@@ -137,7 +138,10 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 self._handle_control_key(event)
 
-            elif event.type == pygame.TEXTINPUT and not self.game_over:
+            elif (
+                event.type == pygame.TEXTINPUT
+                and self.state is GameState.PLAYING
+            ):
                 current_time = pygame.time.get_ticks()
 
                 if current_time >= self.text_input_blocked_until:
@@ -146,24 +150,49 @@ class Game:
     def _handle_control_key(self, event: pygame.event.Event) -> None:
         """Gestiona las teclas que controlan la aplicación o editan el texto."""
 
+        # Escape tiene un comportamiento distinto según el estado actual.
         if event.key == pygame.K_ESCAPE:
-            self.running = False
+            self._handle_escape_key()
+            return
 
-        elif self.game_over:
-            # Durante la derrota solo se permite reiniciar o cerrar el juego.
+        if self.state is GameState.MENU:
+            if event.key in (
+                pygame.K_RETURN,
+                pygame.K_KP_ENTER,
+                pygame.K_SPACE,
+            ):
+                self._start_new_game()
+
+        elif self.state is GameState.GAME_OVER:
+            # Durante la derrota, R comienza una partida nueva.
             if event.key == pygame.K_r:
-                self._restart_game()
+                self._start_new_game()
 
-        elif event.key == pygame.K_BACKSPACE:
+        elif (
+            self.state is GameState.PLAYING
+            and event.key == pygame.K_BACKSPACE
+        ):
             # Evita modificar el texto si el campo ya está vacío.
             if self.typed_text:
                 self.typed_text = self.typed_text[:-1]
                 self._reset_caret_blink()
 
+    def _handle_escape_key(self) -> None:
+        """Pausa, reanuda o cierra según el estado actual."""
+
+        if self.state is GameState.PLAYING:
+            self.state = GameState.PAUSED
+        elif self.state is GameState.PAUSED:
+            self.state = GameState.PLAYING
+            self._block_text_input()
+        else:
+            # En el menú y al finalizar, Escape cierra la aplicación.
+            self.running = False
+
     def _append_text(self, new_text: str) -> None:
         """Añade caracteres imprimibles sin superar el límite permitido."""
 
-        if self.game_over:
+        if self.state is not GameState.PLAYING:
             return
 
         # Descarta posibles caracteres de control que no deben mostrarse.
@@ -239,8 +268,8 @@ class Game:
     def _update(self, delta_time: float) -> None:
         """Actualiza el cursor y el movimiento del enemigo."""
 
-        # Congela la partida mientras se muestra la pantalla de derrota.
-        if self.game_over:
+        # Solo la partida activa actualiza tiempo, cursor y movimiento.
+        if self.state is not GameState.PLAYING:
             return
 
         current_time = pygame.time.get_ticks()
@@ -267,22 +296,22 @@ class Game:
         self.typed_text = ""
 
         if self.lives <= 0:
-            self.game_over = True
+            self.state = GameState.GAME_OVER
             return
 
         self.word_manager.next_word()
         self.enemy = self._create_enemy()
         self._reset_caret_blink()
 
-    def _restart_game(self) -> None:
-        """Restablece el progreso y comienza una sesión nueva."""
+    def _start_new_game(self) -> None:
+        """Restablece el progreso y comienza una partida nueva."""
 
         self.completed_words = 0
         self.missed_words = 0
         self.lives = STARTING_LIVES
         self.score = 0
         self.combo = 0
-        self.game_over = False
+        self.state = GameState.PLAYING
         self.typed_text = ""
         self.typing_stats.reset()
         self.wave_manager.reset()
@@ -290,11 +319,14 @@ class Game:
         self.word_manager.next_word()
         self.enemy = self._create_enemy()
         self._reset_caret_blink()
+        self._block_text_input()
 
-        # Evita que la R usada para reiniciar se escriba en el campo.
+    def _block_text_input(self) -> None:
+        """Impide que una tecla de control se añada al texto del jugador."""
+
         self.text_input_blocked_until = (
             pygame.time.get_ticks()
-            + RESTART_INPUT_BLOCK_DURATION
+            + CONTROL_INPUT_BLOCK_DURATION
         )
 
 
@@ -313,7 +345,11 @@ class Game:
         self._draw_battlefield()
         self._draw_interface()
 
-        if self.game_over:
+        if self.state is GameState.MENU:
+            self._draw_menu()
+        elif self.state is GameState.PAUSED:
+            self._draw_pause()
+        elif self.state is GameState.GAME_OVER:
             self._draw_game_over()
 
         # Muestra en pantalla todo lo dibujado durante este fotograma.
@@ -417,7 +453,7 @@ class Game:
             )
 
         help_surface = self.small_font.render(
-            "Retroceso: borrar  |  Esc: cerrar",
+            "Retroceso: borrar  |  Esc: pausa",
             True,
             MUTED_TEXT_COLOR,
         )
@@ -574,13 +610,7 @@ class Game:
     def _draw_game_over(self) -> None:
         """Dibuja una capa de derrota con las opciones disponibles."""
 
-        # La superficie con transparencia oscurece la partida sin ocultarla.
-        overlay = pygame.Surface(
-            (WINDOW_WIDTH, WINDOW_HEIGHT),
-            pygame.SRCALPHA,
-        )
-        overlay.fill(GAME_OVER_OVERLAY_COLOR)
-        self.screen.blit(overlay, (0, 0))
+        self._draw_overlay()
 
         game_over_surface = self.title_font.render(
             "FIN DE LA PARTIDA",
@@ -629,3 +659,74 @@ class Game:
             center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100)
         )
         self.screen.blit(restart_surface, restart_rect)
+
+    def _draw_menu(self) -> None:
+        """Dibuja el menú que espera antes de comenzar la partida."""
+
+        self._draw_overlay()
+
+        menu_title = self.title_font.render(
+            "TYPING SURVIVOR",
+            True,
+            ACCENT_COLOR,
+        )
+        menu_title_rect = menu_title.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
+        )
+        self.screen.blit(menu_title, menu_title_rect)
+
+        start_surface = self.body_font.render(
+            "Pulsa Enter o Espacio para comenzar",
+            True,
+            TEXT_COLOR,
+        )
+        start_rect = start_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 20)
+        )
+        self.screen.blit(start_surface, start_rect)
+
+        exit_surface = self.small_font.render(
+            "Esc: cerrar",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        exit_rect = exit_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 70)
+        )
+        self.screen.blit(exit_surface, exit_rect)
+
+    def _draw_pause(self) -> None:
+        """Dibuja una capa de pausa sobre la partida congelada."""
+
+        self._draw_overlay()
+
+        pause_surface = self.title_font.render(
+            "PAUSA",
+            True,
+            ACCENT_COLOR,
+        )
+        pause_rect = pause_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 25)
+        )
+        self.screen.blit(pause_surface, pause_rect)
+
+        continue_surface = self.small_font.render(
+            "Pulsa Esc para continuar  |  Cierra la ventana para salir",
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        continue_rect = continue_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 35)
+        )
+        self.screen.blit(continue_surface, continue_rect)
+
+    def _draw_overlay(self) -> None:
+        """Oscurece la partida para destacar una pantalla superpuesta."""
+
+        # La transparencia conserva el contexto visual de la partida.
+        overlay = pygame.Surface(
+            (WINDOW_WIDTH, WINDOW_HEIGHT),
+            pygame.SRCALPHA,
+        )
+        overlay.fill(GAME_OVER_OVERLAY_COLOR)
+        self.screen.blit(overlay, (0, 0))
