@@ -7,6 +7,7 @@ class GameState(Enum):
     """Representa las pantallas y modos principales de la aplicación."""
 
     MENU = auto()
+    COUNTDOWN = auto()
     PLAYING = auto()
     PAUSED = auto()
     GAME_OVER = auto()

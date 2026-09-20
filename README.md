@@ -16,6 +16,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Entrada de texto compatible con la distribución del teclado.
 - Campo de escritura con cursor parpadeante.
 - Menú inicial y pausa durante la partida.
+- Cuenta atrás antes de empezar y después de reanudar la partida.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
 - Palabras objetivo cargadas desde un archivo externo.
 - Varios enemigos simultáneos distribuidos en carriles convergentes.

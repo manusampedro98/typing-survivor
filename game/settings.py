@@ -11,6 +11,9 @@ WINDOW_TITLE = "Typing Survivor"
 # Número máximo de fotogramas procesados por segundo.
 FPS = 60
 
+# Tiempo de preparación antes de iniciar o reanudar la acción.
+COUNTDOWN_DURATION = 3.0
+
 
 # Paleta principal de la interfaz en formato RGB.
 BACKGROUND_COLOR = (16, 18, 27)

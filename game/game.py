@@ -16,6 +16,7 @@ from game.settings import (
     BODY_FONT_SIZE,
     CARET_BLINK_INTERVAL,
     CONTROL_INPUT_BLOCK_DURATION,
+    COUNTDOWN_DURATION,
     FPS,
     KEY_REPEAT_DELAY,
     KEY_REPEAT_INTERVAL,
@@ -109,6 +110,9 @@ class Game:
         # Counter permite añadir nuevos tipos sin crear contadores separados.
         self.defeated_enemies: Counter[EnemyType] = Counter()
         self.state = GameState.MENU
+
+        # La cuenta atrás conserva su propio tiempo sin mover enemigos.
+        self.countdown_remaining = 0.0
 
         # Crea un enemigo inmóvil como fondo del menú inicial.
         self.enemy_manager.reset()
@@ -209,11 +213,10 @@ class Game:
     def _handle_escape_key(self) -> None:
         """Pausa, reanuda o cierra según el estado actual."""
 
-        if self.state is GameState.PLAYING:
+        if self.state in (GameState.PLAYING, GameState.COUNTDOWN):
             self.state = GameState.PAUSED
         elif self.state is GameState.PAUSED:
-            self.state = GameState.PLAYING
-            self._block_text_input()
+            self._start_countdown()
         else:
             # En el menú y al finalizar, Escape cierra la aplicación.
             self.running = False
@@ -325,6 +328,10 @@ class Game:
     def _update(self, delta_time: float) -> None:
         """Actualiza el cursor, las apariciones y los enemigos."""
 
+        if self.state is GameState.COUNTDOWN:
+            self._update_countdown(delta_time)
+            return
+
         # Solo la partida activa actualiza tiempo, cursor y movimiento.
         if self.state is not GameState.PLAYING:
             return
@@ -342,6 +349,19 @@ class Game:
         self.enemy_manager.update(delta_time)
         self._handle_enemy_arrivals()
         self.effect_manager.update(delta_time)
+
+    def _update_countdown(self, delta_time: float) -> None:
+        """Reduce la espera y activa la partida al llegar a cero."""
+
+        self.countdown_remaining = max(
+            0.0,
+            self.countdown_remaining - delta_time,
+        )
+
+        if self.countdown_remaining == 0.0:
+            self.state = GameState.PLAYING
+            self._reset_caret_blink()
+            self._block_text_input()
 
     def _handle_enemy_arrivals(self) -> None:
         """Resta vidas por cada enemigo que alcanza la base."""
@@ -379,13 +399,19 @@ class Game:
         self.combo = 0
         self.is_new_high_score = False
         self.defeated_enemies.clear()
-        self.state = GameState.PLAYING
         self.typed_text = ""
         self.active_enemy = None
         self.typing_stats.reset()
         self.wave_manager.reset()
         self.enemy_manager.reset()
         self.effect_manager.reset()
+        self._start_countdown()
+
+    def _start_countdown(self) -> None:
+        """Inicia el tiempo de preparación con la acción congelada."""
+
+        self.countdown_remaining = COUNTDOWN_DURATION
+        self.state = GameState.COUNTDOWN
         self._reset_caret_blink()
         self._block_text_input()
 
@@ -443,6 +469,7 @@ class Game:
         )
         self.ui_renderer.draw_state_overlay(
             state=self.state,
+            countdown_remaining=self.countdown_remaining,
             high_score=self.save_manager.high_score,
             is_new_high_score=self.is_new_high_score,
             score=self.score,

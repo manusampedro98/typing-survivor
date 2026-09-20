@@ -1,6 +1,7 @@
 """Representación visual de la interfaz y las pantallas del juego."""
 
 from collections import Counter
+import math
 
 import pygame
 
@@ -75,6 +76,7 @@ class UIRenderer:
     def draw_state_overlay(
         self,
         state: GameState,
+        countdown_remaining: float,
         high_score: HighScore,
         is_new_high_score: bool,
         score: int,
@@ -87,6 +89,8 @@ class UIRenderer:
 
         if state is GameState.MENU:
             self._draw_menu(high_score)
+        elif state is GameState.COUNTDOWN:
+            self._draw_countdown(countdown_remaining)
         elif state is GameState.PAUSED:
             self._draw_pause()
         elif state is GameState.GAME_OVER:
@@ -404,6 +408,33 @@ class UIRenderer:
             center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 35)
         )
         self.screen.blit(continue_surface, continue_rect)
+
+    def _draw_countdown(self, countdown_remaining: float) -> None:
+        """Muestra el tiempo de preparación antes de activar la partida."""
+
+        self._draw_overlay()
+
+        ready_surface = self.body_font.render(
+            "PREPÁRATE",
+            True,
+            TEXT_COLOR,
+        )
+        ready_rect = ready_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
+        )
+        self.screen.blit(ready_surface, ready_rect)
+
+        # Ceil mantiene cada número visible durante aproximadamente un segundo.
+        displayed_number = max(1, math.ceil(countdown_remaining))
+        number_surface = self.title_font.render(
+            str(displayed_number),
+            True,
+            ACCENT_COLOR,
+        )
+        number_rect = number_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 20)
+        )
+        self.screen.blit(number_surface, number_rect)
 
     def _draw_overlay(self) -> None:
         """Oscurece la partida para destacar una pantalla superpuesta."""
