@@ -18,6 +18,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Menú inicial y pausa durante la partida.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
 - Palabras objetivo cargadas desde un archivo externo.
+- Varios enemigos simultáneos distribuidos en carriles convergentes.
+- Selección automática del objetivo mediante la primera letra escrita.
 - Comparación visual de caracteres correctos e incorrectos.
 - Selección automática de una nueva palabra al completar la actual.
 - Enemigo móvil con velocidad independiente de los FPS.
@@ -53,6 +55,7 @@ typing-survivor/
 │   ├── __init__.py      # Define el paquete del juego
 │   ├── armored_enemy.py # Variante resistente de dos palabras
 │   ├── enemy.py         # Movimiento y representación del enemigo
+│   ├── enemy_manager.py # Aparición, movimiento y selección de objetivos
 │   ├── enemy_type.py    # Identificadores de las variantes enemigas
 │   ├── fast_enemy.py    # Variante rápida con bonificación de puntos
 │   ├── game.py          # Controlador y bucle principal
@@ -90,9 +93,10 @@ conda activate typing-survivor
 python main.py
 ```
 
-Al ejecutar el proyecto aparecerá un enemigo que avanza hacia la base. Cada carácter
-se marcará según coincida con su palabra y, al completar el objetivo, el enemigo será
-reemplazado. Si alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
+Al comenzar aparecerán enemigos que avanzan hacia la base desde distintos carriles.
+La primera letra escrita selecciona el objetivo más cercano cuya palabra coincida;
+cada carácter posterior se marcará según sea correcto o incorrecto. Si un enemigo
+alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
 reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
 Retroceso y pausar o reanudar con `Esc`. Desde el menú y la pantalla final, `Esc` cierra

@@ -13,13 +13,13 @@ DEFAULT_WORDS_FILE = (
 
 
 class WordManager:
-    """Gestiona la lista de palabras y selecciona el objetivo actual."""
+    """Carga la lista y proporciona palabras para los enemigos."""
 
     def __init__(self, words_file: Path = DEFAULT_WORDS_FILE) -> None:
-        """Carga las palabras y selecciona el primer objetivo."""
+        """Carga las palabras disponibles durante la partida."""
 
         self.words = self._load_words(words_file)
-        self.current_word = self.next_word()
+        self.last_selected_word: str | None = None
 
     @staticmethod
     def _load_words(words_file: Path) -> list[str]:
@@ -42,17 +42,32 @@ class WordManager:
 
         return words
 
-    def next_word(self) -> str:
-        """Selecciona una palabra distinta de la anterior cuando sea posible."""
+    def choose_word(
+        self,
+        excluded_words: set[str] | None = None,
+    ) -> str:
+        """Selecciona una palabra que no esté siendo utilizada en pantalla."""
 
-        previous_word = getattr(self, "current_word", None)
+        excluded_words = excluded_words or set()
 
-        # Evita repetir consecutivamente el mismo objetivo si hay alternativas.
+        # Evita duplicados visibles y repeticiones consecutivas cuando sea posible.
         available_words = [
             word
             for word in self.words
-            if word != previous_word
+            if word not in excluded_words
+            and word != self.last_selected_word
         ]
 
-        self.current_word = choice(available_words or self.words)
-        return self.current_word
+        # Si quedan pocas palabras, se prioriza no duplicar las visibles.
+        fallback_words = [
+            word
+            for word in self.words
+            if word not in excluded_words
+        ]
+        selected_word = choice(
+            available_words
+            or fallback_words
+            or self.words
+        )
+        self.last_selected_word = selected_word
+        return selected_word

@@ -1,19 +1,16 @@
 """Controlador principal de Typing Survivor."""
 
 from collections import Counter
-from random import random
 
 import pygame
 
-from game.armored_enemy import ArmoredEnemy
 from game.enemy import Enemy
+from game.enemy_manager import EnemyManager
 from game.enemy_type import EnemyType
-from game.fast_enemy import FastEnemy
 from game.game_state import GameState
 from game.settings import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
-    BATTLE_LANE_Y,
     BODY_FONT_SIZE,
     BORDER_COLOR,
     CARET_BLINK_INTERVAL,
@@ -21,15 +18,17 @@ from game.settings import (
     CARET_WIDTH,
     CONTROL_INPUT_BLOCK_DURATION,
     CORRECT_COLOR,
-    ENEMY_START_POSITION,
+    ENEMY_LANE_START_POSITIONS,
     FPS,
     GAME_OVER_OVERLAY_COLOR,
     INCORRECT_COLOR,
     INPUT_BOX_HEIGHT,
+    INPUT_BOX_CENTER_Y,
     INPUT_BOX_WIDTH,
     INPUT_HORIZONTAL_PADDING,
     KEY_REPEAT_DELAY,
     KEY_REPEAT_INTERVAL,
+    LANE_COLOR,
     MAX_COMBO_MULTIPLIER,
     MAX_INPUT_LENGTH,
     MUTED_TEXT_COLOR,
@@ -87,6 +86,12 @@ class Game:
         # Gestiona el aumento gradual de dificultad entre oleadas.
         self.wave_manager = WaveManager()
 
+        # Centraliza la creación y el movimiento de varios enemigos.
+        self.enemy_manager = EnemyManager(
+            self.word_manager,
+            self.wave_manager,
+        )
+
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
         self.missed_words = 0
@@ -98,8 +103,11 @@ class Game:
         self.defeated_enemies: Counter[EnemyType] = Counter()
         self.state = GameState.MENU
 
-        # Crea el primer enemigo asociado a la palabra seleccionada.
-        self.enemy = self._create_enemy()
+        # Crea un enemigo inmóvil como fondo del menú inicial.
+        self.enemy_manager.reset()
+
+        # El objetivo se fija al escribir la primera letra de su palabra.
+        self.active_enemy: Enemy | None = None
 
         # Almacena temporalmente los caracteres escritos por el jugador.
         self.typed_text = ""
@@ -184,6 +192,11 @@ class Game:
             # Evita modificar el texto si el campo ya está vacío.
             if self.typed_text:
                 self.typed_text = self.typed_text[:-1]
+
+                # Vaciar el campo permite seleccionar otro enemigo.
+                if not self.typed_text:
+                    self.active_enemy = None
+
                 self._reset_caret_blink()
 
     def _handle_escape_key(self) -> None:
@@ -209,55 +222,68 @@ class Game:
             character for character in new_text if character.isprintable()
         )
 
-        # Impide escribir más caracteres de los que contiene la palabra objetivo.
-        input_limit = min(
-            MAX_INPUT_LENGTH,
-            len(self.word_manager.current_word),
+        # Procesar uno a uno permite completar y seleccionar otro objetivo
+        # incluso si el sistema entrega varios caracteres en un mismo evento.
+        for character in printable_text:
+            self._append_character(character)
+
+    def _append_character(self, character: str) -> None:
+        """Añade un carácter al objetivo seleccionado por su letra inicial."""
+
+        if self.active_enemy is None:
+            self.active_enemy = self.enemy_manager.select_target(character)
+
+            if self.active_enemy is None:
+                # Una inicial sin objetivo sigue contando como error de escritura.
+                self.typing_stats.register_character(character, "")
+                self._reset_caret_blink()
+                return
+
+        target_word = self.active_enemy.word
+        input_limit = min(MAX_INPUT_LENGTH, len(target_word))
+
+        if len(self.typed_text) >= input_limit:
+            return
+
+        expected_character = target_word[len(self.typed_text)]
+        self.typing_stats.register_character(
+            character,
+            expected_character,
         )
-        available_space = input_limit - len(self.typed_text)
-        text_to_add = printable_text[:available_space]
+        self.typed_text += character
+        self._reset_caret_blink()
 
-        if text_to_add:
-            start_index = len(self.typed_text)
-
-            # Cada carácter aceptado cuenta como un intento para la precisión.
-            for offset, character in enumerate(text_to_add):
-                target_index = start_index + offset
-                expected_character = self.word_manager.current_word[
-                    target_index
-                ]
-                self.typing_stats.register_character(
-                    character,
-                    expected_character,
-                )
-
-            self.typed_text += text_to_add
-            self._reset_caret_blink()
-
-            if self.typed_text == self.word_manager.current_word:
-                self._complete_current_word()
+        if self.typed_text == target_word:
+            self._complete_current_word()
 
     def _complete_current_word(self) -> None:
         """Registra el acierto y prepara el siguiente objetivo."""
 
+        if self.active_enemy is None:
+            return
+
+        completed_enemy = self.active_enemy
+        completed_word = completed_enemy.word
+
         # El combo se actualiza antes de calcular los puntos del acierto.
         self.combo += 1
         self.score += self._calculate_word_score(
-            self.word_manager.current_word,
-            self.enemy.score_multiplier,
+            completed_word,
+            completed_enemy.score_multiplier,
         )
         self.completed_words += 1
         self.wave_manager.register_completed_word()
-        self.word_manager.next_word()
         self.typed_text = ""
+        self.active_enemy = None
 
-        if self.enemy.take_hit():
-            self.defeated_enemies[self.enemy.enemy_type] += 1
-            self.enemy = self._create_enemy()
+        if completed_enemy.take_hit():
+            self.defeated_enemies[completed_enemy.enemy_type] += 1
+            self.enemy_manager.remove(completed_enemy)
         else:
             # El blindado conserva su posición y recibe un nuevo objetivo.
-            self.enemy.word = self.word_manager.current_word
+            self.enemy_manager.replace_word(completed_enemy)
 
+        self.enemy_manager.ensure_enemy()
         self._reset_caret_blink()
 
     def _calculate_word_score(
@@ -280,30 +306,8 @@ class Game:
         multiplier = 1 + (self.combo - 1) // WORDS_PER_MULTIPLIER_LEVEL
         return min(multiplier, MAX_COMBO_MULTIPLIER)
 
-    def _create_enemy(self) -> Enemy:
-        """Crea un enemigo vinculado con la palabra objetivo actual."""
-
-        # Una sola tirada distribuye probabilidades entre las variantes.
-        enemy_roll = random()
-        armored_limit = self.wave_manager.armored_enemy_chance
-        fast_limit = armored_limit + self.wave_manager.fast_enemy_chance
-
-        if enemy_roll < armored_limit:
-            enemy_class = ArmoredEnemy
-        elif enemy_roll < fast_limit:
-            enemy_class = FastEnemy
-        else:
-            enemy_class = Enemy
-
-        return enemy_class(
-            word=self.word_manager.current_word,
-            start_position=ENEMY_START_POSITION,
-            target_position=PLAYER_POSITION,
-            speed=self.wave_manager.enemy_speed,
-        )
-
     def _update(self, delta_time: float) -> None:
-        """Actualiza el cursor y el movimiento del enemigo."""
+        """Actualiza el cursor, las apariciones y los enemigos."""
 
         # Solo la partida activa actualiza tiempo, cursor y movimiento.
         if self.state is not GameState.PLAYING:
@@ -319,26 +323,32 @@ class Game:
             self.caret_visible = not self.caret_visible
             self.caret_last_toggle = current_time
 
-        self.enemy.update(delta_time)
+        self.enemy_manager.update(delta_time)
+        self._handle_enemy_arrivals()
 
-        if self.enemy.has_reached_target():
-            self._handle_enemy_arrival()
+    def _handle_enemy_arrivals(self) -> None:
+        """Resta vidas por cada enemigo que alcanza la base."""
 
-    def _handle_enemy_arrival(self) -> None:
-        """Registra el fallo y prepara un enemigo con una palabra nueva."""
+        reached_enemies = self.enemy_manager.reached_enemies()
 
-        self.missed_words += 1
-        self.lives -= 1
-        self.combo = 0
-        self.typed_text = ""
+        for enemy in reached_enemies:
+            self.enemy_manager.remove(enemy)
+            self.missed_words += 1
+            self.lives -= 1
+            self.combo = 0
 
-        if self.lives <= 0:
-            self.state = GameState.GAME_OVER
-            return
+            # Solo se descarta el texto si pertenecía al enemigo alcanzado.
+            if enemy is self.active_enemy:
+                self.active_enemy = None
+                self.typed_text = ""
+                self._reset_caret_blink()
 
-        self.word_manager.next_word()
-        self.enemy = self._create_enemy()
-        self._reset_caret_blink()
+            if self.lives <= 0:
+                self.state = GameState.GAME_OVER
+                return
+
+        if reached_enemies:
+            self.enemy_manager.ensure_enemy()
 
     def _start_new_game(self) -> None:
         """Restablece el progreso y comienza una partida nueva."""
@@ -351,11 +361,10 @@ class Game:
         self.defeated_enemies.clear()
         self.state = GameState.PLAYING
         self.typed_text = ""
+        self.active_enemy = None
         self.typing_stats.reset()
         self.wave_manager.reset()
-
-        self.word_manager.next_word()
-        self.enemy = self._create_enemy()
+        self.enemy_manager.reset()
         self._reset_caret_blink()
         self._block_text_input()
 
@@ -394,30 +403,10 @@ class Game:
         pygame.display.flip()
 
     def _draw_interface(self) -> None:
-        """Dibuja el título, las instrucciones y la zona de escritura."""
+        """Dibuja la información y la zona de escritura."""
 
-        title_surface = self.title_font.render(
-            "TYPING SURVIVOR",
-            True,
-            ACCENT_COLOR,
-        )
-        title_rect = title_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 6)
-        )
-        self.screen.blit(title_surface, title_rect)
-
-        subtitle_surface = self.small_font.render(
-            "Entrena tu velocidad. Sobrevive escribiendo.",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        subtitle_rect = subtitle_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, title_rect.bottom + 30)
-        )
-        self.screen.blit(subtitle_surface, subtitle_rect)
-
-        # Muestra la palabra que el jugador debe escribir.
-        self._draw_target_word()
+        # Cada enemigo muestra su propia palabra y estado.
+        self._draw_enemy_words()
         self._draw_progress()
         self._draw_wave_progress()
 
@@ -430,7 +419,7 @@ class Game:
         )
         input_box.center = (
             WINDOW_WIDTH // 2,
-            WINDOW_HEIGHT // 2 + 65,
+            INPUT_BOX_CENTER_Y,
         )
 
         pygame.draw.rect(
@@ -491,37 +480,46 @@ class Game:
             )
 
         help_surface = self.small_font.render(
-            "Retroceso: borrar  |  Esc: pausa",
+            "Inicial: elegir objetivo  |  Retroceso: borrar  |  Esc: pausa",
             True,
             MUTED_TEXT_COLOR,
         )
         help_rect = help_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, input_box.bottom + 45)
+            center=(WINDOW_WIDTH // 2, input_box.top - 18)
         )
         self.screen.blit(help_surface, help_rect)
 
-    def _draw_target_word(self) -> None:
-        """Dibuja la palabra objetivo y compara cada carácter escrito."""
+    def _draw_enemy_words(self) -> None:
+        """Dibuja la palabra y el estado de cada enemigo visible."""
+
+        for enemy in self.enemy_manager.enemies:
+            self._draw_enemy_word(enemy)
+
+    def _draw_enemy_word(self, enemy: Enemy) -> None:
+        """Dibuja una palabra y resalta el progreso del objetivo activo."""
 
         enemy_details = (
-            f"{self.enemy.enemy_type.display_name}"
-            f"  ·  x{self.enemy.score_multiplier} puntos"
+            f"{enemy.enemy_type.display_name}"
+            f"  ·  x{enemy.score_multiplier} puntos"
         )
 
-        if self.enemy.max_health > 1:
+        if enemy.max_health > 1:
             enemy_details += (
-                f"  ·  Escudo {self.enemy.health}/{self.enemy.max_health}"
+                f"  ·  Escudo {enemy.health}/{enemy.max_health}"
             )
+
+        if enemy is self.active_enemy:
+            enemy_details = f"▶  {enemy_details}"
 
         type_surface = self.small_font.render(
             enemy_details,
             True,
-            self.enemy.label_color,
+            enemy.label_color,
         )
         type_rect = type_surface.get_rect(
             center=(
-                round(self.enemy.position.x),
-                round(self.enemy.position.y) - 98,
+                round(enemy.position.x),
+                max(75, round(enemy.position.y) - 82),
             )
         )
         self.screen.blit(type_surface, type_rect)
@@ -529,8 +527,8 @@ class Game:
         character_surfaces = []
 
         # Asigna un color a cada carácter según el progreso del jugador.
-        for index, character in enumerate(self.enemy.word):
-            if index < len(self.typed_text):
+        for index, character in enumerate(enemy.word):
+            if enemy is self.active_enemy and index < len(self.typed_text):
                 character_color = (
                     CORRECT_COLOR
                     if self.typed_text[index] == character
@@ -557,12 +555,12 @@ class Game:
         word_center_x = max(
             half_word_width + 20,
             min(
-                round(self.enemy.position.x),
+                round(enemy.position.x),
                 WINDOW_WIDTH - half_word_width - 20,
             ),
         )
         character_x = word_center_x - half_word_width
-        word_center_y = round(self.enemy.position.y) - 58
+        word_center_y = max(105, round(enemy.position.y) - 47)
 
         # Dibuja las letras una junto a otra conservando sus colores.
         for character_surface in character_surfaces:
@@ -573,21 +571,25 @@ class Game:
             character_x += character_surface.get_width()
 
     def _draw_battlefield(self) -> None:
-        """Dibuja la trayectoria, el enemigo y la base provisional."""
+        """Dibuja los carriles, los enemigos y la base provisional."""
 
-        lane_start = (round(ENEMY_START_POSITION[0]), BATTLE_LANE_Y)
-        lane_end = (round(PLAYER_POSITION[0]), BATTLE_LANE_Y)
-
-        # La línea permite leer con claridad la trayectoria del enemigo.
-        pygame.draw.line(
-            self.screen,
-            BORDER_COLOR,
-            lane_start,
-            lane_end,
-            width=3,
+        lane_end = (
+            round(PLAYER_POSITION[0]),
+            round(PLAYER_POSITION[1]),
         )
 
-        self.enemy.draw(self.screen)
+        # Los carriles convergen visualmente en la posición del jugador.
+        for lane_start in ENEMY_LANE_START_POSITIONS:
+            pygame.draw.line(
+                self.screen,
+                LANE_COLOR,
+                (round(lane_start[0]), round(lane_start[1])),
+                lane_end,
+                width=3,
+            )
+
+        for enemy in self.enemy_manager.enemies:
+            enemy.draw(self.screen)
 
         player_center = (
             round(PLAYER_POSITION[0]),
@@ -605,6 +607,11 @@ class Game:
             player_center,
             PLAYER_RADIUS,
         )
+
+        # La letra identifica temporalmente al jugador hasta añadir su sprite.
+        player_label = self.body_font.render("P", True, BACKGROUND_COLOR)
+        player_label_rect = player_label.get_rect(center=player_center)
+        self.screen.blit(player_label, player_label_rect)
 
     def _draw_progress(self) -> None:
         """Muestra la puntuación y el progreso de la sesión."""

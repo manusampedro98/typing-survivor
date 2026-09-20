@@ -4,6 +4,8 @@ from game.settings import (
     ARMORED_ENEMY_BASE_CHANCE,
     ARMORED_ENEMY_CHANCE_INCREMENT,
     ARMORED_ENEMY_FIRST_WAVE,
+    BASE_ENEMY_SPAWN_INTERVAL,
+    BASE_MAX_ENEMIES,
     ENEMY_SPEED,
     ENEMY_SPEED_INCREMENT,
     FAST_ENEMY_BASE_CHANCE,
@@ -12,6 +14,10 @@ from game.settings import (
     MAX_ARMORED_ENEMY_CHANCE,
     MAX_ENEMY_SPEED,
     MAX_FAST_ENEMY_CHANCE,
+    MAX_SIMULTANEOUS_ENEMIES,
+    MIN_ENEMY_SPAWN_INTERVAL,
+    SPAWN_INTERVAL_DECREASE,
+    WAVES_PER_ENEMY_SLOT,
     WORDS_PER_WAVE,
 )
 
@@ -62,6 +68,27 @@ class WaveManager:
         return min(
             ARMORED_ENEMY_BASE_CHANCE + additional_chance,
             MAX_ARMORED_ENEMY_CHANCE,
+        )
+
+    @property
+    def enemy_spawn_interval(self) -> float:
+        """Devuelve el tiempo entre apariciones para la oleada actual."""
+
+        interval = BASE_ENEMY_SPAWN_INTERVAL - (
+            self.current_wave - 1
+        ) * SPAWN_INTERVAL_DECREASE
+        return max(interval, MIN_ENEMY_SPAWN_INTERVAL)
+
+    @property
+    def max_simultaneous_enemies(self) -> int:
+        """Calcula cuántos enemigos pueden coincidir en pantalla."""
+
+        additional_slots = (
+            self.current_wave - 1
+        ) // WAVES_PER_ENEMY_SLOT
+        return min(
+            BASE_MAX_ENEMIES + additional_slots,
+            MAX_SIMULTANEOUS_ENEMIES,
         )
 
     def register_completed_word(self) -> None:
