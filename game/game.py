@@ -9,6 +9,7 @@ from game.enemy_manager import EnemyManager
 from game.enemy_type import EnemyType
 from game.effects import EffectManager
 from game.game_state import GameState
+from game.save_manager import SaveManager
 from game.settings import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
@@ -95,6 +96,10 @@ class Game:
 
         # Gestiona partículas y mensajes sin mezclarlos con las entidades.
         self.effect_manager = EffectManager()
+
+        # Carga el récord guardado fuera del repositorio del proyecto.
+        self.save_manager = SaveManager()
+        self.is_new_high_score = False
 
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
@@ -360,6 +365,7 @@ class Game:
 
             if self.lives <= 0:
                 self.state = GameState.GAME_OVER
+                self._finish_game()
                 return
 
         if reached_enemies:
@@ -373,6 +379,7 @@ class Game:
         self.lives = STARTING_LIVES
         self.score = 0
         self.combo = 0
+        self.is_new_high_score = False
         self.defeated_enemies.clear()
         self.state = GameState.PLAYING
         self.typed_text = ""
@@ -383,6 +390,16 @@ class Game:
         self.effect_manager.reset()
         self._reset_caret_blink()
         self._block_text_input()
+
+    def _finish_game(self) -> None:
+        """Compara el resultado final con el récord almacenado."""
+
+        self.is_new_high_score = self.save_manager.update_high_score(
+            score=self.score,
+            wave=self.wave_manager.current_wave,
+            words_per_minute=self.typing_stats.words_per_minute,
+            accuracy=self.typing_stats.accuracy,
+        )
 
     def _block_text_input(self) -> None:
         """Impide que una tecla de control se añada al texto del jugador."""
@@ -645,6 +662,7 @@ class Game:
         progress_surface = self.small_font.render(
             (
                 f"Puntos: {self.score}"
+                f"  |  Récord: {self.save_manager.high_score.score}"
                 f"  |  Combo: {self.combo} (x{combo_multiplier})"
                 f"  |  Vidas: {self.lives}"
             ),
@@ -721,9 +739,13 @@ class Game:
         self._draw_overlay()
 
         game_over_surface = self.title_font.render(
-            "FIN DE LA PARTIDA",
+            (
+                "NUEVO RÉCORD"
+                if self.is_new_high_score
+                else "FIN DE LA PARTIDA"
+            ),
             True,
-            INCORRECT_COLOR,
+            ACCENT_COLOR if self.is_new_high_score else INCORRECT_COLOR,
         )
         game_over_rect = game_over_surface.get_rect(
             center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
@@ -733,8 +755,7 @@ class Game:
         result_surface = self.body_font.render(
             (
                 f"Puntuación: {self.score}"
-                f"  |  Palabras: {self.completed_words}"
-                f"  |  Oleada: {self.wave_manager.current_wave}"
+                f"  |  Récord: {self.save_manager.high_score.score}"
             ),
             True,
             TEXT_COLOR,
@@ -744,13 +765,26 @@ class Game:
         )
         self.screen.blit(result_surface, result_rect)
 
+        session_surface = self.small_font.render(
+            (
+                f"Palabras: {self.completed_words}"
+                f"  |  Oleada: {self.wave_manager.current_wave}"
+            ),
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        session_rect = session_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 45)
+        )
+        self.screen.blit(session_surface, session_rect)
+
         defeated_surface = self.small_font.render(
             f"Eliminados  |  {self._get_enemy_defeat_summary()}",
             True,
             MUTED_TEXT_COLOR,
         )
         defeated_rect = defeated_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 50)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 80)
         )
         self.screen.blit(defeated_surface, defeated_rect)
 
@@ -764,7 +798,7 @@ class Game:
             MUTED_TEXT_COLOR,
         )
         stats_rect = stats_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 85)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 115)
         )
         self.screen.blit(stats_surface, stats_rect)
 
@@ -774,7 +808,7 @@ class Game:
             MUTED_TEXT_COLOR,
         )
         restart_rect = restart_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 130)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 155)
         )
         self.screen.blit(restart_surface, restart_rect)
 
@@ -793,13 +827,29 @@ class Game:
         )
         self.screen.blit(menu_title, menu_title_rect)
 
+        record = self.save_manager.high_score
+        record_surface = self.small_font.render(
+            (
+                f"Récord: {record.score} puntos"
+                f"  |  Oleada {record.wave}"
+                f"  |  {record.words_per_minute:.1f} PPM"
+                f"  |  {record.accuracy:.1f}% precisión"
+            ),
+            True,
+            MUTED_TEXT_COLOR,
+        )
+        record_rect = record_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 5)
+        )
+        self.screen.blit(record_surface, record_rect)
+
         start_surface = self.body_font.render(
             "Pulsa Enter o Espacio para comenzar",
             True,
             TEXT_COLOR,
         )
         start_rect = start_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 20)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 55)
         )
         self.screen.blit(start_surface, start_rect)
 
@@ -809,7 +859,7 @@ class Game:
             MUTED_TEXT_COLOR,
         )
         exit_rect = exit_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 70)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 100)
         )
         self.screen.blit(exit_surface, exit_rect)
 

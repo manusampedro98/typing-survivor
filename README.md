@@ -26,6 +26,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Enemigos normales, rápidos y blindados con comportamientos diferentes.
 - Contador de enemigos eliminados desglosado por tipo.
 - Partículas y textos flotantes al atacar o recibir daño.
+- Récord persistente con puntuación, oleada, PPM y precisión.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
 - Puntuación basada en la longitud de cada palabra.
@@ -62,6 +63,7 @@ typing-survivor/
 │   ├── fast_enemy.py    # Variante rápida con bonificación de puntos
 │   ├── game.py          # Controlador y bucle principal
 │   ├── game_state.py    # Estados principales de la aplicación
+│   ├── save_manager.py  # Guardado local del mejor resultado
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
 │   ├── wave_manager.py  # Oleadas y dificultad progresiva
