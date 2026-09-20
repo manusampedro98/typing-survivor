@@ -15,6 +15,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 
 - Entrada de texto compatible con la distribución del teclado.
 - Campo de escritura con cursor parpadeante.
+- Ventana redimensionable con escalado proporcional de la interfaz.
 - Menú inicial y pausa durante la partida.
 - Cuenta atrás antes de empezar y después de reanudar la partida.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
@@ -27,6 +28,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Enemigos normales, rápidos y blindados con comportamientos diferentes.
 - Contador de enemigos eliminados desglosado por tipo.
 - Partículas y textos flotantes al atacar o recibir daño.
+- Power-up de ralentización con carga, activación y duración limitada.
+- HUD con seis espacios reservados para ampliar el sistema de power-ups.
 - Récord persistente con puntuación, oleada, PPM y precisión.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
@@ -66,6 +69,7 @@ typing-survivor/
 │   ├── fast_enemy.py    # Variante rápida con bonificación de puntos
 │   ├── game.py          # Controlador y bucle principal
 │   ├── game_state.py    # Estados principales de la aplicación
+│   ├── power_up_manager.py # Cargas y efectos temporales de power-ups
 │   ├── save_manager.py  # Guardado local del mejor resultado
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
@@ -107,7 +111,8 @@ cada carácter posterior se marcará según sea correcto o incorrecto. Si un ene
 alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
 reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
-Retroceso y pausar o reanudar con `Esc`. Desde el menú y la pantalla final, `Esc` cierra
+Retroceso, activar una ralentización disponible con `1` y pausar o reanudar con
+`Esc`. Desde el menú y la pantalla final, `Esc` cierra
 el juego; el botón de la ventana permite cerrarlo en cualquier momento. Las PPM se
 calculan desde la primera tecla escrita y la precisión compara cada intento con el
 carácter esperado.

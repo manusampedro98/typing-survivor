@@ -10,6 +10,7 @@ from game.enemy_manager import EnemyManager
 from game.enemy_type import EnemyType
 from game.effects import EffectManager
 from game.game_state import GameState
+from game.power_up_manager import PowerUpManager
 from game.save_manager import SaveManager
 from game.settings import (
     BACKGROUND_COLOR,
@@ -22,6 +23,8 @@ from game.settings import (
     KEY_REPEAT_INTERVAL,
     MAX_COMBO_MULTIPLIER,
     MAX_INPUT_LENGTH,
+    MIN_WINDOW_HEIGHT,
+    MIN_WINDOW_WIDTH,
     PLAYER_POSITION,
     POINTS_PER_CHARACTER,
     SMALL_FONT_SIZE,
@@ -48,8 +51,14 @@ class Game:
         # Inicializa los módulos internos necesarios para utilizar Pygame.
         pygame.init()
 
-        # Crea la superficie principal sobre la que se dibuja la interfaz.
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        # La ventana puede cambiar de tamaño sin alterar las coordenadas del juego.
+        self.display_surface = pygame.display.set_mode(
+            (WINDOW_WIDTH, WINDOW_HEIGHT),
+            pygame.RESIZABLE,
+        )
+
+        # Todo se dibuja primero sobre una superficie lógica de tamaño estable.
+        self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption(WINDOW_TITLE)
 
         # El reloj controla la velocidad máxima del bucle principal.
@@ -95,6 +104,9 @@ class Game:
 
         # Gestiona partículas y mensajes sin mezclarlos con las entidades.
         self.effect_manager = EffectManager()
+
+        # Gestiona las cargas y los efectos temporales de los power-ups.
+        self.power_up_manager = PowerUpManager()
 
         # Carga el récord guardado fuera del repositorio del proyecto.
         self.save_manager = SaveManager()
@@ -163,6 +175,9 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
 
+            elif event.type == pygame.VIDEORESIZE:
+                self._resize_window(event.w, event.h)
+
             elif event.type == pygame.KEYDOWN:
                 self._handle_control_key(event)
 
@@ -196,19 +211,35 @@ class Game:
             if event.key == pygame.K_r:
                 self._start_new_game()
 
-        elif (
-            self.state is GameState.PLAYING
-            and event.key == pygame.K_BACKSPACE
-        ):
-            # Evita modificar el texto si el campo ya está vacío.
-            if self.typed_text:
-                self.typed_text = self.typed_text[:-1]
+        elif self.state is GameState.PLAYING:
+            power_up_keys = {
+                pygame.K_1: 0,
+                pygame.K_KP1: 0,
+                pygame.K_2: 1,
+                pygame.K_KP2: 1,
+                pygame.K_3: 2,
+                pygame.K_KP3: 2,
+                pygame.K_4: 3,
+                pygame.K_KP4: 3,
+                pygame.K_5: 4,
+                pygame.K_KP5: 4,
+                pygame.K_6: 5,
+                pygame.K_KP6: 5,
+            }
 
-                # Vaciar el campo permite seleccionar otro enemigo.
-                if not self.typed_text:
-                    self.active_enemy = None
+            if event.key in power_up_keys:
+                self._activate_power_up_slot(power_up_keys[event.key])
+                self._block_text_input()
+            elif event.key == pygame.K_BACKSPACE:
+                # Evita modificar el texto si el campo ya está vacío.
+                if self.typed_text:
+                    self.typed_text = self.typed_text[:-1]
 
-                self._reset_caret_blink()
+                    # Vaciar el campo permite seleccionar otro enemigo.
+                    if not self.typed_text:
+                        self.active_enemy = None
+
+                    self._reset_caret_blink()
 
     def _handle_escape_key(self) -> None:
         """Pausa, reanuda o cierra según el estado actual."""
@@ -302,6 +333,13 @@ class Game:
 
         if enemy_defeated:
             self.defeated_enemies[completed_enemy.enemy_type] += 1
+
+            if self.power_up_manager.try_grant_slow_charge():
+                self.effect_manager.create_power_up_feedback(
+                    completed_enemy.position,
+                    "RALENTIZACIÓN LISTA",
+                )
+
             self.enemy_manager.remove(completed_enemy)
         else:
             # El blindado conserva su posición y recibe un nuevo objetivo.
@@ -368,9 +406,26 @@ class Game:
             self.caret_visible = not self.caret_visible
             self.caret_last_toggle = current_time
 
-        self.enemy_manager.update(delta_time)
+        self.power_up_manager.update(delta_time)
+        self.enemy_manager.update(
+            delta_time,
+            self.power_up_manager.enemy_speed_multiplier,
+        )
         self._handle_enemy_arrivals()
         self.effect_manager.update(delta_time)
+
+    def _activate_power_up_slot(self, slot_index: int) -> None:
+        """Activa la habilidad asignada a una ranura del HUD."""
+
+        # La primera ranura contiene la única habilidad implementada por ahora.
+        if slot_index != 0:
+            return
+
+        if self.power_up_manager.activate_slow():
+            self.effect_manager.create_power_up_feedback(
+                PLAYER_POSITION,
+                "TIEMPO RALENTIZADO",
+            )
 
     def _update_countdown(self, delta_time: float) -> None:
         """Reduce la espera y activa la partida al llegar a cero."""
@@ -432,6 +487,7 @@ class Game:
             preserve_first_enemy=preserve_menu_enemy,
         )
         self.effect_manager.reset()
+        self.power_up_manager.reset()
         self._start_countdown()
 
     def _start_countdown(self) -> None:
@@ -467,6 +523,18 @@ class Game:
         self.caret_visible = True
         self.caret_last_toggle = pygame.time.get_ticks()
 
+    def _resize_window(self, width: int, height: int) -> None:
+        """Aplica un tamaño mínimo al redimensionar la ventana."""
+
+        window_size = (
+            max(MIN_WINDOW_WIDTH, width),
+            max(MIN_WINDOW_HEIGHT, height),
+        )
+        self.display_surface = pygame.display.set_mode(
+            window_size,
+            pygame.RESIZABLE,
+        )
+
     def _draw(self) -> None:
         """Dibuja el fotograma actual y lo presenta en la ventana."""
 
@@ -491,7 +559,12 @@ class Game:
             lives=self.lives,
             typing_stats=self.typing_stats,
             wave_manager=self.wave_manager,
-            defeated_enemies=self.defeated_enemies,
+            slow_charge_available=(
+                self.power_up_manager.slow_charge_available
+            ),
+            slow_time_remaining=(
+                self.power_up_manager.slow_time_remaining
+            ),
         )
         self.ui_renderer.draw_state_overlay(
             state=self.state,
@@ -511,6 +584,36 @@ class Game:
                 self.screen,
                 self.title_font,
             )
+
+        self._present_frame()
+
+    def _present_frame(self) -> None:
+        """Escala el fotograma lógico conservando su proporción original."""
+
+        display_width, display_height = self.display_surface.get_size()
+        scale = min(
+            display_width / WINDOW_WIDTH,
+            display_height / WINDOW_HEIGHT,
+        )
+        scaled_size = (
+            max(1, round(WINDOW_WIDTH * scale)),
+            max(1, round(WINDOW_HEIGHT * scale)),
+        )
+        if scaled_size == (WINDOW_WIDTH, WINDOW_HEIGHT):
+            scaled_frame = self.screen
+        else:
+            scaled_frame = pygame.transform.smoothscale(
+                self.screen,
+                scaled_size,
+            )
+        frame_position = (
+            (display_width - scaled_size[0]) // 2,
+            (display_height - scaled_size[1]) // 2,
+        )
+
+        # Las bandas conservan la relación de aspecto sin deformar gráficos.
+        self.display_surface.fill(BACKGROUND_COLOR)
+        self.display_surface.blit(scaled_frame, frame_position)
 
         # Muestra en pantalla todo lo dibujado durante este fotograma.
         pygame.display.flip()

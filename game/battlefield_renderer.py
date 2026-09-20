@@ -147,9 +147,17 @@ class BattlefieldRenderer:
             True,
             enemy.label_color,
         )
+        type_half_width = type_surface.get_width() // 2
+        type_center_x = max(
+            type_half_width + 20,
+            min(
+                round(enemy.position.x),
+                WINDOW_WIDTH - type_half_width - 20,
+            ),
+        )
         type_rect = type_surface.get_rect(
             center=(
-                round(enemy.position.x),
+                type_center_x,
                 max(75, round(enemy.position.y) - 82),
             )
         )

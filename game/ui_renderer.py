@@ -10,9 +10,11 @@ from game.game_state import GameState
 from game.save_manager import HighScore
 from game.settings import (
     ACCENT_COLOR,
+    BACKGROUND_COLOR,
     BORDER_COLOR,
     CARET_HEIGHT,
     CARET_WIDTH,
+    COMBO_BAR_CENTER_Y,
     COMBO_BAR_HEIGHT,
     COMBO_BAR_WIDTH,
     GAME_OVER_OVERLAY_COLOR,
@@ -21,10 +23,23 @@ from game.settings import (
     INPUT_BOX_HEIGHT,
     INPUT_BOX_WIDTH,
     INPUT_HORIZONTAL_PADDING,
+    HUD_PANEL_MARGIN,
     MAX_COMBO_MULTIPLIER,
     MUTED_TEXT_COLOR,
     PANEL_COLOR,
+    POWER_UP_COLOR,
+    POWER_UP_PANEL_HEIGHT,
+    POWER_UP_PANEL_TOP,
+    POWER_UP_PANEL_WIDTH,
+    POWER_UP_SLOT_SIZE,
+    SLOW_POWER_UP_DURATION,
+    STATS_PANEL_HEIGHT,
+    STATS_PANEL_TOP,
+    STATS_PANEL_WIDTH,
     TEXT_COLOR,
+    WAVE_PANEL_HEIGHT,
+    WAVE_PANEL_TOP,
+    WAVE_PANEL_WIDTH,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
     WORDS_PER_WAVE,
@@ -62,7 +77,8 @@ class UIRenderer:
         lives: int,
         typing_stats: TypingStats,
         wave_manager: WaveManager,
-        defeated_enemies: Counter[EnemyType],
+        slow_charge_available: bool,
+        slow_time_remaining: float,
     ) -> None:
         """Dibuja la información de la partida y el campo de escritura."""
 
@@ -75,7 +91,11 @@ class UIRenderer:
             lives=lives,
             typing_stats=typing_stats,
         )
-        self._draw_wave_progress(wave_manager, defeated_enemies)
+        self._draw_wave_progress(wave_manager)
+        self._draw_power_up_panel(
+            slow_charge_available,
+            slow_time_remaining,
+        )
         self._draw_input_box(typed_text, caret_visible)
 
     def draw_state_overlay(
@@ -167,16 +187,6 @@ class UIRenderer:
                 border_radius=2,
             )
 
-        help_surface = self.small_font.render(
-            "Inicial: elegir objetivo  |  Retroceso: borrar  |  Esc: pausa",
-            True,
-            MUTED_TEXT_COLOR,
-        )
-        help_rect = help_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, input_box.top - 18)
-        )
-        self.screen.blit(help_surface, help_rect)
-
     def _draw_session_progress(
         self,
         score: int,
@@ -189,44 +199,55 @@ class UIRenderer:
     ) -> None:
         """Muestra puntuación, combo, vidas y métricas de escritura."""
 
-        progress_surface = self.small_font.render(
-            (
-                f"Puntos: {score}"
-                f"  |  Récord: {high_score.score}"
-                f"  |  Combo: {combo} (x{combo_multiplier})"
-                f"  |  Vidas: {lives}"
-            ),
-            True,
-            MUTED_TEXT_COLOR,
+        stats_panel = pygame.Rect(
+            HUD_PANEL_MARGIN,
+            STATS_PANEL_TOP,
+            STATS_PANEL_WIDTH,
+            STATS_PANEL_HEIGHT,
         )
-        progress_rect = progress_surface.get_rect(
-            topright=(WINDOW_WIDTH - 30, 30)
-        )
-        self.screen.blit(progress_surface, progress_rect)
+        self._draw_panel(stats_panel)
 
-        typing_surface = self.small_font.render(
-            (
-                f"PPM: {typing_stats.words_per_minute:.1f}"
-                f"  |  Precisión: {typing_stats.accuracy:.1f}%"
-                f"  |  Errores: {typing_stats.errors}"
-            ),
+        title_surface = self.small_font.render(
+            "ESTADÍSTICAS",
             True,
-            MUTED_TEXT_COLOR,
+            TEXT_COLOR,
         )
-        typing_rect = typing_surface.get_rect(
-            topright=(WINDOW_WIDTH - 30, progress_rect.bottom + 8)
+        title_rect = title_surface.get_rect(
+            center=(stats_panel.centerx, stats_panel.top + 22)
         )
-        self.screen.blit(typing_surface, typing_rect)
+        self.screen.blit(title_surface, title_rect)
+
+        stat_lines = (
+            f"Puntos: {score}",
+            f"Récord: {high_score.score}",
+            f"Combo: {combo} (x{combo_multiplier})",
+            f"Vidas: {lives}",
+            f"PPM: {typing_stats.words_per_minute:.1f}",
+            f"Precisión: {typing_stats.accuracy:.1f}%",
+            f"Errores: {typing_stats.errors}",
+        )
+
+        line_y = stats_panel.top + 43
+
+        for line in stat_lines:
+            line_surface = self.small_font.render(
+                line,
+                True,
+                MUTED_TEXT_COLOR,
+            )
+            line_rect = line_surface.get_rect(
+                topleft=(stats_panel.left + 14, line_y)
+            )
+            self.screen.blit(line_surface, line_rect)
+            line_y += 20
 
         self._draw_combo_bar(
-            top=typing_rect.bottom + 8,
             combo_multiplier=combo_multiplier,
             combo_progress=combo_progress,
         )
 
     def _draw_combo_bar(
         self,
-        top: int,
         combo_multiplier: int,
         combo_progress: float,
     ) -> None:
@@ -237,29 +258,35 @@ class UIRenderer:
         if maximum_reached:
             label = f"COMBO MÁXIMO  x{MAX_COMBO_MULTIPLIER}"
         else:
-            label = f"Próximo multiplicador: x{combo_multiplier + 1}"
+            label = f"COMBO x{combo_multiplier}  >  x{combo_multiplier + 1}"
 
         label_surface = self.small_font.render(
             label,
             True,
             ACCENT_COLOR if maximum_reached else MUTED_TEXT_COLOR,
         )
-        label_rect = label_surface.get_rect(
-            topright=(WINDOW_WIDTH - 30, top)
-        )
-        self.screen.blit(label_surface, label_rect)
-
         # En el nivel máximo no existe otra meta que representar con una barra.
         if maximum_reached:
+            label_rect = label_surface.get_rect(
+                center=(WINDOW_WIDTH // 2, COMBO_BAR_CENTER_Y)
+            )
+            self.screen.blit(label_surface, label_rect)
             return
 
         bar_rect = pygame.Rect(
             0,
-            label_rect.bottom + 4,
+            0,
             COMBO_BAR_WIDTH,
             COMBO_BAR_HEIGHT,
         )
-        bar_rect.right = WINDOW_WIDTH - 30
+        bar_rect.right = (WINDOW_WIDTH + INPUT_BOX_WIDTH) // 2
+        bar_rect.centery = COMBO_BAR_CENTER_Y
+
+        label_rect = label_surface.get_rect(
+            midright=(bar_rect.left - 14, COMBO_BAR_CENTER_Y)
+        )
+        self.screen.blit(label_surface, label_rect)
+
         pygame.draw.rect(
             self.screen,
             PANEL_COLOR,
@@ -295,16 +322,26 @@ class UIRenderer:
     def _draw_wave_progress(
         self,
         wave_manager: WaveManager,
-        defeated_enemies: Counter[EnemyType],
     ) -> None:
         """Muestra la oleada y el avance hacia la siguiente."""
+
+        wave_panel = pygame.Rect(
+            0,
+            WAVE_PANEL_TOP,
+            WAVE_PANEL_WIDTH,
+            WAVE_PANEL_HEIGHT,
+        )
+        wave_panel.centerx = WINDOW_WIDTH // 2
+        self._draw_panel(wave_panel)
 
         wave_surface = self.body_font.render(
             f"OLEADA {wave_manager.current_wave}",
             True,
             ACCENT_COLOR,
         )
-        wave_rect = wave_surface.get_rect(topleft=(30, 25))
+        wave_rect = wave_surface.get_rect(
+            center=(wave_panel.centerx, wave_panel.top + 24)
+        )
         self.screen.blit(wave_surface, wave_rect)
 
         progress_surface = self.small_font.render(
@@ -316,19 +353,159 @@ class UIRenderer:
             MUTED_TEXT_COLOR,
         )
         progress_rect = progress_surface.get_rect(
-            topleft=(30, wave_rect.bottom + 5)
+            center=(wave_panel.centerx, wave_panel.top + 55)
         )
         self.screen.blit(progress_surface, progress_rect)
 
-        defeated_surface = self.small_font.render(
-            self._get_enemy_defeat_summary(defeated_enemies),
+    def _draw_power_up_panel(
+        self,
+        slow_charge_available: bool,
+        slow_time_remaining: float,
+    ) -> None:
+        """Dibuja las ranuras reservadas para power-ups presentes y futuros."""
+
+        power_up_panel = pygame.Rect(
+            WINDOW_WIDTH - HUD_PANEL_MARGIN - POWER_UP_PANEL_WIDTH,
+            POWER_UP_PANEL_TOP,
+            POWER_UP_PANEL_WIDTH,
+            POWER_UP_PANEL_HEIGHT,
+        )
+        self._draw_panel(power_up_panel)
+
+        title_surface = self.small_font.render(
+            "POTENCIADORES",
             True,
-            MUTED_TEXT_COLOR,
+            TEXT_COLOR,
         )
-        defeated_rect = defeated_surface.get_rect(
-            topleft=(30, progress_rect.bottom + 5)
+        title_rect = title_surface.get_rect(
+            center=(power_up_panel.centerx, power_up_panel.top + 22)
         )
-        self.screen.blit(defeated_surface, defeated_rect)
+        self.screen.blit(title_surface, title_rect)
+
+        slot_gap = 12
+        slots_width = POWER_UP_SLOT_SIZE * 3 + slot_gap * 2
+        first_slot_left = power_up_panel.centerx - slots_width // 2
+        slot_top = power_up_panel.top + 43
+
+        for slot_index in range(6):
+            slot_column = slot_index % 3
+            slot_row = slot_index // 3
+            slot_rect = pygame.Rect(
+                first_slot_left
+                + slot_column * (POWER_UP_SLOT_SIZE + slot_gap),
+                slot_top
+                + slot_row * (POWER_UP_SLOT_SIZE + slot_gap),
+                POWER_UP_SLOT_SIZE,
+                POWER_UP_SLOT_SIZE,
+            )
+            slot_color = (
+                POWER_UP_COLOR
+                if slot_index == 0
+                and (slow_charge_available or slow_time_remaining > 0.0)
+                else BORDER_COLOR
+            )
+            pygame.draw.rect(
+                self.screen,
+                BACKGROUND_COLOR,
+                slot_rect,
+                border_radius=10,
+            )
+            pygame.draw.rect(
+                self.screen,
+                slot_color,
+                slot_rect,
+                width=2,
+                border_radius=10,
+            )
+
+            key_surface = self.small_font.render(
+                str(slot_index + 1),
+                True,
+                slot_color,
+            )
+            key_rect = key_surface.get_rect(
+                topleft=(slot_rect.left + 7, slot_rect.top + 4)
+            )
+            self.screen.blit(key_surface, key_rect)
+
+            if slot_index == 0:
+                self._draw_slow_power_up_icon(
+                    slot_rect,
+                    slow_charge_available,
+                    slow_time_remaining,
+                )
+
+    def _draw_slow_power_up_icon(
+        self,
+        slot_rect: pygame.Rect,
+        slow_charge_available: bool,
+        slow_time_remaining: float,
+    ) -> None:
+        """Representa provisionalmente la ralentización como un reloj."""
+
+        is_available = slow_charge_available or slow_time_remaining > 0.0
+        icon_color = POWER_UP_COLOR if is_available else MUTED_TEXT_COLOR
+        icon_center = slot_rect.center
+        icon_radius = 18
+
+        pygame.draw.circle(
+            self.screen,
+            icon_color,
+            icon_center,
+            icon_radius,
+            width=3,
+        )
+        pygame.draw.line(
+            self.screen,
+            icon_color,
+            icon_center,
+            (icon_center[0], icon_center[1] - 10),
+            width=3,
+        )
+        pygame.draw.line(
+            self.screen,
+            icon_color,
+            icon_center,
+            (icon_center[0] + 8, icon_center[1] + 5),
+            width=3,
+        )
+
+        if slow_time_remaining <= 0.0:
+            return
+
+        duration_ratio = min(
+            1.0,
+            slow_time_remaining / SLOW_POWER_UP_DURATION,
+        )
+        duration_bar = pygame.Rect(
+            slot_rect.left + 8,
+            slot_rect.bottom - 9,
+            round((POWER_UP_SLOT_SIZE - 16) * duration_ratio),
+            4,
+        )
+        pygame.draw.rect(
+            self.screen,
+            POWER_UP_COLOR,
+            duration_bar,
+            border_radius=2,
+        )
+
+    def _draw_panel(self, panel_rect: pygame.Rect) -> None:
+        """Dibuja un panel reutilizable con el estilo general del HUD."""
+
+        pygame.draw.rect(
+            self.screen,
+            PANEL_COLOR,
+            panel_rect,
+            border_radius=12,
+        )
+        pygame.draw.rect(
+            self.screen,
+            BORDER_COLOR,
+            panel_rect,
+            width=2,
+            border_radius=12,
+        )
 
     def _draw_game_over(
         self,

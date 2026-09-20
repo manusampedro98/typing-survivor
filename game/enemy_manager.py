@@ -2,6 +2,8 @@
 
 from random import random
 
+import pygame
+
 from game.armored_enemy import ArmoredEnemy
 from game.enemy import Enemy
 from game.fast_enemy import FastEnemy
@@ -43,11 +45,16 @@ class EnemyManager:
         self.next_lane_index = 0
         self.spawn_enemy()
 
-    def update(self, delta_time: float) -> None:
+    def update(
+        self,
+        delta_time: float,
+        movement_multiplier: float = 1.0,
+    ) -> None:
         """Mueve los enemigos y genera refuerzos cuando corresponde."""
 
         for enemy in self.enemies:
-            enemy.update(delta_time)
+            # El multiplicador afecta al movimiento, no al ritmo de aparición.
+            enemy.update(delta_time * max(0.0, movement_multiplier))
 
         self.spawn_elapsed = min(
             self.spawn_elapsed + delta_time,
@@ -73,7 +80,7 @@ class EnemyManager:
             word=word,
             start_position=start_position,
             target_position=PLAYER_POSITION,
-            speed=self.wave_manager.enemy_speed,
+            speed=self._get_balanced_speed(start_position),
         )
         self.enemies.append(enemy)
         return enemy
@@ -147,6 +154,24 @@ class EnemyManager:
             self.next_lane_index + 1
         ) % len(ENEMY_LANE_START_POSITIONS)
         return start_position
+
+    def _get_balanced_speed(
+        self,
+        start_position: tuple[float, float],
+    ) -> float:
+        """Compensa la longitud del carril para igualar el tiempo de llegada."""
+
+        reference_distance = pygame.Vector2(
+            ENEMY_LANE_START_POSITIONS[0]
+        ).distance_to(PLAYER_POSITION)
+        lane_distance = pygame.Vector2(start_position).distance_to(
+            PLAYER_POSITION
+        )
+        return (
+            self.wave_manager.enemy_speed
+            * lane_distance
+            / reference_distance
+        )
 
     def _active_words(
         self,

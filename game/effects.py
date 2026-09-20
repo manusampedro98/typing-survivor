@@ -6,7 +6,7 @@ from random import uniform
 
 import pygame
 
-from game.settings import ACCENT_COLOR, INCORRECT_COLOR
+from game.settings import ACCENT_COLOR, INCORRECT_COLOR, POWER_UP_COLOR
 
 
 @dataclass
@@ -215,6 +215,29 @@ class EffectManager:
                 text="-1 VIDA",
                 position=pygame.Vector2(position),
                 color=INCORRECT_COLOR,
+            )
+        )
+
+    def create_power_up_feedback(
+        self,
+        position: pygame.Vector2 | tuple[float, float],
+        text: str,
+    ) -> None:
+        """Destaca la obtención o activación de una ralentización."""
+
+        effect_position = pygame.Vector2(position)
+        self._create_burst(
+            effect_position,
+            POWER_UP_COLOR,
+            particle_count=14,
+            maximum_speed=160,
+        )
+        self.floating_texts.append(
+            FloatingText(
+                text=text,
+                position=effect_position,
+                color=POWER_UP_COLOR,
+                lifetime=1.2,
             )
         )
 

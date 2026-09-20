@@ -4,6 +4,8 @@
 # Dimensiones de la ventana principal en píxeles.
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
+MIN_WINDOW_WIDTH = 800
+MIN_WINDOW_HEIGHT = 450
 
 # Texto mostrado en la barra superior de la ventana.
 WINDOW_TITLE = "Typing Survivor"
@@ -24,6 +26,7 @@ MUTED_TEXT_COLOR = (150, 158, 180)
 ACCENT_COLOR = (65, 202, 255)
 CORRECT_COLOR = (80, 220, 140)
 INCORRECT_COLOR = (255, 95, 110)
+POWER_UP_COLOR = (180, 110, 255)
 LANE_COLOR = (195, 88, 24)
 ENEMY_COLOR = (235, 55, 65)
 ENEMY_OUTLINE_COLOR = (105, 28, 35)
@@ -112,19 +115,38 @@ ARMORED_ENEMY_HEALTH = 2
 POINTS_PER_CHARACTER = 10
 WORDS_PER_MULTIPLIER_LEVEL = 3
 MAX_COMBO_MULTIPLIER = 5
-COMBO_BAR_WIDTH = 260
+COMBO_BAR_WIDTH = 520
 COMBO_BAR_HEIGHT = 12
+COMBO_BAR_CENTER_Y = 611
+
+# Paneles laterales que mantienen el centro despejado para el combate.
+HUD_PANEL_MARGIN = 20
+WAVE_PANEL_TOP = 20
+WAVE_PANEL_WIDTH = 260
+WAVE_PANEL_HEIGHT = 78
+STATS_PANEL_TOP = 500
+STATS_PANEL_WIDTH = 260
+STATS_PANEL_HEIGHT = 205
+POWER_UP_PANEL_TOP = 500
+POWER_UP_PANEL_WIDTH = 260
+POWER_UP_PANEL_HEIGHT = 205
+POWER_UP_SLOT_SIZE = 68
+
+# La ralentización puede guardarse y activarse cuando el jugador la necesite.
+SLOW_POWER_UP_DROP_CHANCE = 0.25
+SLOW_POWER_UP_DURATION = 5.0
+SLOW_ENEMY_SPEED_MULTIPLIER = 0.45
 
 # Los carriles se abren en abanico desde el jugador hacia la parte superior.
 # El orden alterna centro, izquierda y derecha para repartir las apariciones.
 ENEMY_LANE_START_POSITIONS = (
-    (640.0, 210.0),
-    (430.0, 205.0),
-    (850.0, 205.0),
-    (220.0, 215.0),
-    (1060.0, 215.0),
-    (60.0, 245.0),
-    (1220.0, 245.0),
+    (640.0, 190.0),
+    (390.0, 135.0),
+    (890.0, 135.0),
+    (160.0, 155.0),
+    (1120.0, 155.0),
+    (40.0, 185.0),
+    (1240.0, 185.0),
 )
 PLAYER_POSITION = (WINDOW_WIDTH / 2, 565.0)
 PLAYER_RADIUS = 32
