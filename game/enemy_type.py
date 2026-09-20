@@ -8,6 +8,7 @@ class EnemyType(Enum):
 
     NORMAL = ("NORMAL", "Normales")
     FAST = ("RÁPIDO", "Rápidos")
+    ARMORED = ("BLINDADO", "Blindados")
 
     def __init__(self, display_name: str, plural_name: str) -> None:
         """Guarda los textos usados al mostrar el tipo y su contador."""

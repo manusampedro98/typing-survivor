@@ -1,11 +1,15 @@
 """Progresión de oleadas y dificultad de la partida."""
 
 from game.settings import (
+    ARMORED_ENEMY_BASE_CHANCE,
+    ARMORED_ENEMY_CHANCE_INCREMENT,
+    ARMORED_ENEMY_FIRST_WAVE,
     ENEMY_SPEED,
     ENEMY_SPEED_INCREMENT,
     FAST_ENEMY_BASE_CHANCE,
     FAST_ENEMY_CHANCE_INCREMENT,
     FAST_ENEMY_FIRST_WAVE,
+    MAX_ARMORED_ENEMY_CHANCE,
     MAX_ENEMY_SPEED,
     MAX_FAST_ENEMY_CHANCE,
     WORDS_PER_WAVE,
@@ -43,6 +47,21 @@ class WaveManager:
         return min(
             FAST_ENEMY_BASE_CHANCE + additional_chance,
             MAX_FAST_ENEMY_CHANCE,
+        )
+
+    @property
+    def armored_enemy_chance(self) -> float:
+        """Calcula la probabilidad de generar un enemigo blindado."""
+
+        if self.current_wave < ARMORED_ENEMY_FIRST_WAVE:
+            return 0.0
+
+        additional_chance = (
+            self.current_wave - ARMORED_ENEMY_FIRST_WAVE
+        ) * ARMORED_ENEMY_CHANCE_INCREMENT
+        return min(
+            ARMORED_ENEMY_BASE_CHANCE + additional_chance,
+            MAX_ARMORED_ENEMY_CHANCE,
         )
 
     def register_completed_word(self) -> None:

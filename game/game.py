@@ -5,6 +5,7 @@ from random import random
 
 import pygame
 
+from game.armored_enemy import ArmoredEnemy
 from game.enemy import Enemy
 from game.enemy_type import EnemyType
 from game.fast_enemy import FastEnemy
@@ -245,12 +246,18 @@ class Game:
             self.word_manager.current_word,
             self.enemy.score_multiplier,
         )
-        self.defeated_enemies[self.enemy.enemy_type] += 1
         self.completed_words += 1
         self.wave_manager.register_completed_word()
         self.word_manager.next_word()
         self.typed_text = ""
-        self.enemy = self._create_enemy()
+
+        if self.enemy.take_hit():
+            self.defeated_enemies[self.enemy.enemy_type] += 1
+            self.enemy = self._create_enemy()
+        else:
+            # El blindado conserva su posición y recibe un nuevo objetivo.
+            self.enemy.word = self.word_manager.current_word
+
         self._reset_caret_blink()
 
     def _calculate_word_score(
@@ -276,12 +283,17 @@ class Game:
     def _create_enemy(self) -> Enemy:
         """Crea un enemigo vinculado con la palabra objetivo actual."""
 
-        # La oleada determina si puede aparecer la variante rápida.
-        enemy_class = (
-            FastEnemy
-            if random() < self.wave_manager.fast_enemy_chance
-            else Enemy
-        )
+        # Una sola tirada distribuye probabilidades entre las variantes.
+        enemy_roll = random()
+        armored_limit = self.wave_manager.armored_enemy_chance
+        fast_limit = armored_limit + self.wave_manager.fast_enemy_chance
+
+        if enemy_roll < armored_limit:
+            enemy_class = ArmoredEnemy
+        elif enemy_roll < fast_limit:
+            enemy_class = FastEnemy
+        else:
+            enemy_class = Enemy
 
         return enemy_class(
             word=self.word_manager.current_word,
@@ -491,11 +503,18 @@ class Game:
     def _draw_target_word(self) -> None:
         """Dibuja la palabra objetivo y compara cada carácter escrito."""
 
+        enemy_details = (
+            f"{self.enemy.enemy_type.display_name}"
+            f"  ·  x{self.enemy.score_multiplier} puntos"
+        )
+
+        if self.enemy.max_health > 1:
+            enemy_details += (
+                f"  ·  Escudo {self.enemy.health}/{self.enemy.max_health}"
+            )
+
         type_surface = self.small_font.render(
-            (
-                f"{self.enemy.enemy_type.display_name}"
-                f"  ·  x{self.enemy.score_multiplier} puntos"
-            ),
+            enemy_details,
             True,
             self.enemy.label_color,
         )

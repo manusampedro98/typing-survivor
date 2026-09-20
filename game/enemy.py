@@ -35,6 +35,14 @@ class Enemy:
         self.enemy_type = EnemyType.NORMAL
         self.score_multiplier = 1
         self.label_color = ENEMY_COLOR
+        self.max_health = 1
+        self.health = self.max_health
+
+    def take_hit(self) -> bool:
+        """Resta resistencia y devuelve si el enemigo ha sido eliminado."""
+
+        self.health -= 1
+        return self.health <= 0
 
     def update(self, delta_time: float) -> None:
         """Avanza hacia el objetivo de forma independiente de los FPS."""

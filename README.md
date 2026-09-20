@@ -21,7 +21,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Comparación visual de caracteres correctos e incorrectos.
 - Selección automática de una nueva palabra al completar la actual.
 - Enemigo móvil con velocidad independiente de los FPS.
-- Enemigos normales y rápidos con apariencia y recompensa diferentes.
+- Enemigos normales, rápidos y blindados con comportamientos diferentes.
 - Contador de enemigos eliminados desglosado por tipo.
 - Eliminación del enemigo al completar su palabra.
 - Sistema de tres vidas y registro de palabras completadas y falladas.
@@ -51,6 +51,7 @@ typing-survivor/
 │   └── words.txt        # Palabras disponibles durante la partida
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
+│   ├── armored_enemy.py # Variante resistente de dos palabras
 │   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── enemy_type.py    # Identificadores de las variantes enemigas
 │   ├── fast_enemy.py    # Variante rápida con bonificación de puntos
@@ -100,4 +101,5 @@ calculan desde la primera tecla escrita y la precisión compara cada intento con
 carácter esperado.
 Cada cinco palabras completadas comienza una nueva oleada y aumenta la velocidad de
 los enemigos hasta alcanzar el límite configurado. Desde la segunda oleada pueden
-aparecer enemigos rápidos, que conceden el doble de puntos.
+aparecer enemigos rápidos, que conceden el doble de puntos. Desde la tercera también
+pueden aparecer blindados: son más lentos, pero necesitan dos palabras para caer.
