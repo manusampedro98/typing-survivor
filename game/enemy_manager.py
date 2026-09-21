@@ -94,7 +94,7 @@ class EnemyManager:
     def ensure_enemy(self) -> None:
         """Evita que la partida quede sin ningún objetivo disponible."""
 
-        if not self.enemies:
+        if not any(not enemy.is_pending_hit for enemy in self.enemies):
             self.spawn_enemy()
             self.spawn_elapsed = 0.0
 
@@ -111,7 +111,10 @@ class EnemyManager:
         candidates = [
             enemy
             for enemy in self.enemies
-            if enemy.word.startswith(first_character)
+            if (
+                not enemy.is_pending_hit
+                and enemy.word.startswith(first_character)
+            )
         ]
 
         if not candidates:

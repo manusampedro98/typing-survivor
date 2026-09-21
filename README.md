@@ -16,8 +16,19 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Entrada de texto compatible con la distribución del teclado.
 - Campo de escritura con cursor parpadeante.
 - Ventana redimensionable con escalado proporcional de la interfaz.
-- Menú inicial y pausa durante la partida.
-- Música ambiental y efectos de sonido para las acciones principales.
+- HUD compacto con puntuación, oleada y vidas en la zona superior.
+- Barra inferior con métricas, escritura, combo y seis potenciadores.
+- Arena ilustrada con oscurecimiento y carriles de alto contraste.
+- Pantalla de inicio sobre un fondo limpio, navegable con teclado y ratón.
+- Botones de juego, opciones, ayuda, salida, créditos y contacto.
+- Selección de dificultad fácil, normal o difícil antes de cada partida.
+- Menú de opciones controlable con teclado o ratón.
+- Accesos a LinkedIn y GitHub desde Créditos y Contacto.
+- Pantalla de ayuda con controles y reglas de enemigos.
+- Modo de pantalla completa mediante la tecla F11.
+- Música ambiental, efectos de combate y sonidos de escritura y borrado.
+- Animaciones idle y de tecleo sincronizadas con la entrada del jugador.
+- Reacciones de daño, muerte y reaparición con color y partículas.
 - Control de volumen y silencio desde el menú de pausa.
 - Cuenta atrás antes de empezar y después de reanudar la partida.
 - Borrado continuo al mantener pulsada la tecla Retroceso.
@@ -28,8 +39,13 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Selección automática de una nueva palabra al completar la actual.
 - Enemigo móvil con velocidad independiente de los FPS.
 - Enemigos normales, rápidos y blindados con comportamientos diferentes.
+- Perspectiva suave y movimiento flotante para los enemigos voladores.
+- Animaciones idle, de daño y de muerte para los tres tipos de enemigo.
+- Rotura de escudo y ciclo de armadura dañada para el blindado.
+- Daño y retirada inmediata cuando un enemigo alcanza al jugador.
 - Contador de enemigos eliminados desglosado por tipo.
 - Partículas y textos flotantes al atacar o recibir daño.
+- Proyectiles dirigidos con animación de viaje e impacto sincronizado.
 - Power-up de ralentización con carga, activación y duración limitada.
 - HUD con seis espacios reservados para ampliar el sistema de power-ups.
 - Récord persistente con puntuación, oleada, PPM y precisión.
@@ -40,7 +56,7 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Cálculo en tiempo real de PPM, precisión y errores de escritura.
 - Oleadas con aumento gradual y limitado de la velocidad enemiga.
 - Aviso animado de nueva oleada sin interrumpir la partida.
-- Pantalla de fin de partida con reinicio mediante la tecla R.
+- Pantalla de fin de partida con reinicio y reaparición visible mediante R.
 - Cierre mediante el botón de la ventana o la tecla Escape.
 
 ## Tecnologías
@@ -56,15 +72,22 @@ El desarrollo de las mecánicas se encuentra en progreso.
 typing-survivor/
 ├── assets/
 │   ├── fonts/           # Fuentes de texto
-│   ├── images/          # Imágenes y sprites
+│   ├── images/
+│   │   ├── backgrounds/ # Fondos optimizados para el juego
+│   │   ├── enemies/     # Animaciones separadas por tipo de enemigo
+│   │   ├── effects/     # Proyectiles e impactos animados
+│   │   └── player/      # Animaciones idle y de ataque del jugador
 │   └── sounds/          # Música y efectos de sonido
 ├── data/
 │   └── words.txt        # Palabras disponibles durante la partida
+├── docs/
+│   └── DEVELOPMENT_NOTES.md # Problemas resueltos y decisiones técnicas
 ├── game/
 │   ├── __init__.py      # Define el paquete del juego
 │   ├── audio_manager.py # Música, efectos, volumen y silencio
 │   ├── armored_enemy.py # Variante resistente de dos palabras
 │   ├── battlefield_renderer.py # Dibujo del campo de batalla
+│   ├── difficulty.py    # Ajustes de las tres dificultades
 │   ├── enemy.py         # Movimiento y representación del enemigo
 │   ├── enemy_manager.py # Aparición, movimiento y selección de objetivos
 │   ├── enemy_type.py    # Identificadores de las variantes enemigas
@@ -73,6 +96,9 @@ typing-survivor/
 │   ├── game.py          # Controlador y bucle principal
 │   ├── game_state.py    # Estados principales de la aplicación
 │   ├── power_up_manager.py # Cargas y efectos temporales de power-ups
+│   ├── player_renderer.py # Carga y animación visual del jugador
+│   ├── enemy_renderer.py # Carga, escala y dibujo de enemigos
+│   ├── projectile_manager.py # Proyectiles dirigidos e impactos
 │   ├── save_manager.py  # Guardado local del mejor resultado
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
@@ -86,6 +112,12 @@ typing-survivor/
 ```
 
 Los archivos `.gitkeep` permiten conservar en Git las carpetas que todavía están vacías.
+
+## Notas de desarrollo
+
+Los problemas técnicos más relevantes y sus soluciones se documentan en
+[`docs/DEVELOPMENT_NOTES.md`](docs/DEVELOPMENT_NOTES.md). Estas notas explican
+el razonamiento seguido y las comprobaciones realizadas durante el desarrollo.
 
 ## Preparación del entorno
 
@@ -108,6 +140,11 @@ conda activate typing-survivor
 python main.py
 ```
 
+La pantalla inicial permite jugar, configurar el audio y la pantalla completa,
+consultar la ayuda, abrir Créditos y Contacto o salir. Todos sus accesos se pueden
+recorrer con las flechas. Al pulsar Jugar se elige entre dificultad fácil, normal
+o difícil; cada nivel modifica la velocidad y la frecuencia de aparición. Tras
+confirmarla, el jugador reaparece mediante una animación antes de comenzar.
 Al comenzar aparecerán enemigos que avanzan hacia la base desde distintos carriles.
 La primera letra escrita selecciona el objetivo más cercano cuya palabra coincida;
 cada carácter posterior se marcará según sea correcto o incorrecto. Si un enemigo
@@ -116,7 +153,9 @@ reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
 Retroceso, activar una ralentización disponible con `1` y pausar o reanudar con
 `Esc`. Durante la pausa, las flechas izquierda y derecha ajustan el volumen y
-`M` activa o desactiva el silencio. Desde el menú y la pantalla final, `Esc` cierra
+`M` activa o desactiva el silencio. La tecla `H` abre la ayuda desde el menú,
+la pausa o la pantalla final y `F11` alterna el modo de pantalla completa.
+Desde el menú y la pantalla final, `Esc` cierra
 el juego; el botón de la ventana permite cerrarlo en cualquier momento. Las PPM se
 calculan desde la primera tecla escrita y la precisión compara cada intento con el
 carácter esperado.

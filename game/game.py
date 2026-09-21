@@ -1,17 +1,24 @@
 """Controlador principal de Typing Survivor."""
 
 from collections import Counter
+import ctypes
+from ctypes import wintypes
+import math
+import sys
+import webbrowser
 
 import pygame
 
 from game.audio_manager import AudioManager
 from game.battlefield_renderer import BattlefieldRenderer
+from game.difficulty import Difficulty
 from game.enemy import Enemy
 from game.enemy_manager import EnemyManager
 from game.enemy_type import EnemyType
 from game.effects import EffectManager
 from game.game_state import GameState
 from game.power_up_manager import PowerUpManager
+from game.projectile_manager import EnergyHit, ProjectileManager
 from game.save_manager import SaveManager
 from game.settings import (
     AUDIO_VOLUME_STEP,
@@ -44,6 +51,10 @@ from game.wave_manager import WaveManager
 from game.word_manager import WordManager
 
 
+LINKEDIN_URL = "https://www.linkedin.com/feed/"
+GITHUB_URL = "https://github.com/manusampedro98?tab=repositories"
+
+
 class Game:
     """Controla la ventana, los eventos y el bucle principal del juego."""
 
@@ -58,6 +69,9 @@ class Game:
             (WINDOW_WIDTH, WINDOW_HEIGHT),
             pygame.RESIZABLE,
         )
+        self.windowed_size = self.display_surface.get_size()
+        self.windowed_position = self._get_window_position()
+        self.is_fullscreen = False
 
         # Todo se dibuja primero sobre una superficie lógica de tamaño estable.
         self.screen = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -107,6 +121,9 @@ class Game:
         # Gestiona partículas y mensajes sin mezclarlos con las entidades.
         self.effect_manager = EffectManager()
 
+        # Gestiona las bolas de energía y comunica cuándo alcanzan su objetivo.
+        self.projectile_manager = ProjectileManager()
+
         # Gestiona las cargas y los efectos temporales de los power-ups.
         self.power_up_manager = PowerUpManager()
 
@@ -128,6 +145,16 @@ class Game:
         # Counter permite añadir nuevos tipos sin crear contadores separados.
         self.defeated_enemies: Counter[EnemyType] = Counter()
         self.state = GameState.MENU
+
+        # La portada conserva el foco de teclado y la dificultad seleccionada.
+        self.menu_selection = 0
+        self.difficulty_selection = 1
+        self.selected_difficulty = Difficulty.NORMAL
+        self.showing_revive = False
+        self.dragging_volume_slider = False
+
+        # La ayuda recuerda si debe regresar al menú, la pausa o el resultado.
+        self.help_return_state = GameState.MENU
 
         # La cuenta atrás conserva su propio tiempo sin mover enemigos.
         self.countdown_remaining = 0.0
@@ -187,6 +214,15 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 self._handle_control_key(event)
 
+            elif event.type == pygame.MOUSEMOTION:
+                self._handle_mouse_motion(event.pos)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._handle_mouse_click(event.pos)
+
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self.dragging_volume_slider = False
+
             elif (
                 event.type == pygame.TEXTINPUT
                 and self.state is GameState.PLAYING
@@ -199,23 +235,92 @@ class Game:
     def _handle_control_key(self, event: pygame.event.Event) -> None:
         """Gestiona las teclas que controlan la aplicación o editan el texto."""
 
+        # F11 mantiene el comportamiento habitual de las aplicaciones de escritorio.
+        if event.key == pygame.K_F11:
+            self._toggle_fullscreen()
+            return
+
         # Escape tiene un comportamiento distinto según el estado actual.
         if event.key == pygame.K_ESCAPE:
             self._handle_escape_key()
             return
 
         if self.state is GameState.MENU:
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.menu_selection = (
+                    self.menu_selection - 1
+                ) % len(self.ui_renderer.main_menu_actions)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self.menu_selection = (
+                    self.menu_selection + 1
+                ) % len(self.ui_renderer.main_menu_actions)
+                self.audio_manager.play("menu_adjust")
             if event.key in (
                 pygame.K_RETURN,
                 pygame.K_KP_ENTER,
                 pygame.K_SPACE,
             ):
-                self._start_new_game()
+                self._activate_menu_action(
+                    self.ui_renderer.main_menu_actions[self.menu_selection]
+                )
+            elif event.key == pygame.K_h:
+                self._open_help()
+
+        elif self.state is GameState.DIFFICULTY:
+            if event.key in (
+                pygame.K_LEFT,
+                pygame.K_UP,
+                pygame.K_a,
+                pygame.K_w,
+            ):
+                self.difficulty_selection = (
+                    self.difficulty_selection - 1
+                ) % len(Difficulty)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (
+                pygame.K_RIGHT,
+                pygame.K_DOWN,
+                pygame.K_d,
+                pygame.K_s,
+            ):
+                self.difficulty_selection = (
+                    self.difficulty_selection + 1
+                ) % len(Difficulty)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (
+                pygame.K_RETURN,
+                pygame.K_KP_ENTER,
+                pygame.K_SPACE,
+            ):
+                self.selected_difficulty = list(Difficulty)[
+                    self.difficulty_selection
+                ]
+                self._start_new_game(self.selected_difficulty)
+
+        elif self.state is GameState.OPTIONS:
+            if event.key in (pygame.K_LEFT, pygame.K_MINUS, pygame.K_KP_MINUS):
+                self.audio_manager.change_volume(-AUDIO_VOLUME_STEP)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (
+                pygame.K_RIGHT,
+                pygame.K_PLUS,
+                pygame.K_EQUALS,
+                pygame.K_KP_PLUS,
+            ):
+                self.audio_manager.change_volume(AUDIO_VOLUME_STEP)
+                self.audio_manager.play("menu_adjust")
+            elif event.key == pygame.K_m:
+                self.audio_manager.toggle_mute()
+                if not self.audio_manager.muted:
+                    self.audio_manager.play("menu_adjust")
 
         elif self.state is GameState.GAME_OVER:
             # Durante la derrota, R comienza una partida nueva.
             if event.key == pygame.K_r:
                 self._start_new_game()
+            elif event.key == pygame.K_h:
+                self._open_help()
 
         elif self.state is GameState.PAUSED:
             # El audio solo se modifica desde el menú de pausa.
@@ -236,6 +341,8 @@ class Game:
                 # Al recuperar el sonido ofrece una confirmación audible.
                 if not self.audio_manager.muted:
                     self.audio_manager.play("menu_adjust")
+            elif event.key == pygame.K_h:
+                self._open_help()
 
         elif self.state is GameState.PLAYING:
             power_up_keys = {
@@ -260,6 +367,7 @@ class Game:
                 # Evita modificar el texto si el campo ya está vacío.
                 if self.typed_text:
                     self.typed_text = self.typed_text[:-1]
+                    self.audio_manager.play_backspace()
 
                     # Vaciar el campo permite seleccionar otro enemigo.
                     if not self.typed_text:
@@ -270,13 +378,125 @@ class Game:
     def _handle_escape_key(self) -> None:
         """Pausa, reanuda o cierra según el estado actual."""
 
-        if self.state in (GameState.PLAYING, GameState.COUNTDOWN):
+        if self.state is GameState.HELP:
+            self.state = self.help_return_state
+        elif self.state in (
+            GameState.DIFFICULTY,
+            GameState.OPTIONS,
+            GameState.CREDITS,
+            GameState.CONTACT,
+        ):
+            self.state = GameState.MENU
+            self.dragging_volume_slider = False
+        elif self.state is GameState.DYING:
+            # La breve secuencia final no se interrumpe con Escape.
+            return
+        elif self.state in (GameState.PLAYING, GameState.COUNTDOWN):
             self.state = GameState.PAUSED
         elif self.state is GameState.PAUSED:
             self._start_countdown()
         else:
             # En el menú y al finalizar, Escape cierra la aplicación.
             self.running = False
+
+    def _open_help(self) -> None:
+        """Abre la ayuda y conserva la pantalla desde la que se accedió."""
+
+        self.help_return_state = self.state
+        self.state = GameState.HELP
+        self.audio_manager.play("menu_adjust")
+
+    def _activate_menu_action(self, action: str) -> None:
+        """Ejecuta la opción elegida en la pantalla de inicio."""
+
+        if action == "JUGAR":
+            self.state = GameState.DIFFICULTY
+        elif action == "OPCIONES":
+            self.state = GameState.OPTIONS
+        elif action == "AYUDA":
+            self._open_help()
+        elif action == "CRÉDITOS":
+            self.state = GameState.CREDITS
+        elif action == "CONTACTO":
+            self.state = GameState.CONTACT
+        elif action == "SALIR":
+            self.running = False
+
+    def _handle_mouse_motion(self, position: tuple[int, int]) -> None:
+        """Traslada el foco del menú al botón situado bajo el puntero."""
+
+        logical_position = self._display_to_logical(position)
+        if logical_position is None:
+            return
+
+        if self.state is GameState.MENU:
+            action = self.ui_renderer.get_menu_action_at(logical_position)
+            if action in self.ui_renderer.main_menu_actions:
+                self.menu_selection = self.ui_renderer.main_menu_actions.index(
+                    action
+                )
+        elif self.state is GameState.DIFFICULTY:
+            difficulty_index = self.ui_renderer.get_difficulty_at(
+                logical_position
+            )
+            if difficulty_index is not None:
+                self.difficulty_selection = difficulty_index
+        elif self.state is GameState.OPTIONS and self.dragging_volume_slider:
+            self._set_volume_from_slider(logical_position)
+
+    def _handle_mouse_click(self, position: tuple[int, int]) -> None:
+        """Activa botones de portada y tarjetas de dificultad con el ratón."""
+
+        logical_position = self._display_to_logical(position)
+        if logical_position is None:
+            return
+
+        if self.state is GameState.MENU:
+            action = self.ui_renderer.get_menu_action_at(logical_position)
+            if action is not None:
+                self.audio_manager.play("menu_adjust")
+                self._activate_menu_action(action)
+        elif self.state is GameState.DIFFICULTY:
+            difficulty_index = self.ui_renderer.get_difficulty_at(
+                logical_position
+            )
+            if difficulty_index is not None:
+                self.difficulty_selection = difficulty_index
+                self.selected_difficulty = list(Difficulty)[difficulty_index]
+                self._start_new_game(self.selected_difficulty)
+        elif self.state is GameState.OPTIONS:
+            action = self.ui_renderer.get_options_control_at(logical_position)
+            if action == "CERRAR":
+                self.state = GameState.MENU
+            elif action == "VOLUMEN":
+                self.dragging_volume_slider = True
+                self._set_volume_from_slider(logical_position)
+            elif action == "MUTE":
+                self.audio_manager.toggle_mute()
+                if not self.audio_manager.muted:
+                    self.audio_manager.play("menu_adjust")
+            elif action == "PANTALLA_COMPLETA":
+                self._toggle_fullscreen()
+        elif self.state is GameState.HELP:
+            action = self.ui_renderer.get_help_action_at(logical_position)
+            if action == "CERRAR":
+                self.state = self.help_return_state
+        elif self.state in (GameState.CREDITS, GameState.CONTACT):
+            action = self.ui_renderer.get_information_action_at(
+                logical_position
+            )
+            if action == "CERRAR":
+                self.state = GameState.MENU
+            elif action == "LINKEDIN":
+                webbrowser.open(LINKEDIN_URL, new=2)
+            elif action == "GITHUB":
+                webbrowser.open(GITHUB_URL, new=2)
+
+    def _set_volume_from_slider(self, position: tuple[int, int]) -> None:
+        """Actualiza el volumen según la posición pulsada en el deslizador."""
+
+        volume = self.ui_renderer.get_volume_from_position(position)
+        self.audio_manager.set_volume(volume)
 
     def _append_text(self, new_text: str) -> None:
         """Añade caracteres imprimibles sin superar el límite permitido."""
@@ -297,12 +517,17 @@ class Game:
     def _append_character(self, character: str) -> None:
         """Añade un carácter al objetivo seleccionado por su letra inicial."""
 
+        # La respuesta audiovisual ocurre con cada letra, incluso si no existe
+        # un enemigo compatible o el carácter termina siendo incorrecto.
+        self.battlefield_renderer.register_player_keystroke()
+        self.audio_manager.play_typing_key()
+
         if self.active_enemy is None:
             self.active_enemy = self.enemy_manager.select_target(character)
 
             if self.active_enemy is None:
-                # Una inicial sin objetivo sigue contando como error de escritura.
-                self.typing_stats.register_character(character, "")
+                # Una inicial sin objetivo disponible se ignora: el jugador no
+                # puede conocer una respuesta válida que no existe en pantalla.
                 self._reset_caret_blink()
                 return
 
@@ -350,33 +575,56 @@ class Game:
         self.typed_text = ""
         self.active_enemy = None
 
-        enemy_defeated = completed_enemy.take_hit()
-        self.effect_manager.create_enemy_feedback(
-            position=completed_enemy.position,
-            color=completed_enemy.label_color,
-            awarded_points=awarded_points,
-            defeated=enemy_defeated,
-        )
+        # La palabra se resuelve al escribirla, pero el daño visual espera a
+        # que la bola alcance al enemigo reservado.
+        completed_enemy.is_pending_hit = True
+        self.projectile_manager.launch(completed_enemy, awarded_points)
 
-        if enemy_defeated:
-            self.audio_manager.play("enemy_defeat")
-            self.defeated_enemies[completed_enemy.enemy_type] += 1
-
-            if self.power_up_manager.try_grant_slow_charge():
-                self.audio_manager.play("power_up_ready")
-                self.effect_manager.create_power_up_feedback(
-                    completed_enemy.position,
-                    "RALENTIZACIÓN LISTA",
-                )
-
-            self.enemy_manager.remove(completed_enemy)
-        else:
-            # El blindado conserva su posición y recibe un nuevo objetivo.
-            self.audio_manager.play("enemy_hit")
-            self.enemy_manager.replace_word(completed_enemy)
-
+        # Si era el último objetivo disponible, se crea otro mientras el
+        # proyectil completa su recorrido para mantener el ritmo de escritura.
         self.enemy_manager.ensure_enemy()
         self._reset_caret_blink()
+
+    def _resolve_energy_hits(self, energy_hits: list[EnergyHit]) -> None:
+        """Aplica el daño cuando cada proyectil alcanza realmente al enemigo."""
+
+        for energy_hit in energy_hits:
+            enemy = energy_hit.enemy
+
+            # Un reinicio puede retirar objetivos con proyectiles pendientes.
+            if enemy not in self.enemy_manager.enemies:
+                continue
+
+            enemy.is_pending_hit = False
+            enemy_defeated = enemy.take_hit()
+            self.effect_manager.create_enemy_feedback(
+                position=energy_hit.position,
+                color=enemy.label_color,
+                awarded_points=energy_hit.awarded_points,
+                defeated=enemy_defeated,
+            )
+
+            if enemy_defeated:
+                self.audio_manager.play("enemy_defeat")
+                self.defeated_enemies[enemy.enemy_type] += 1
+                self.battlefield_renderer.play_enemy_death(enemy)
+
+                if self.power_up_manager.try_grant_slow_charge():
+                    self.audio_manager.play("power_up_ready")
+                    self.effect_manager.create_power_up_feedback(
+                        energy_hit.position,
+                        "RALENTIZACIÓN LISTA",
+                    )
+
+                self.enemy_manager.remove(enemy)
+            else:
+                # El blindado recibe una palabra nueva después del impacto.
+                self.audio_manager.play("enemy_hit")
+                self.battlefield_renderer.play_enemy_damage(enemy)
+                self.enemy_manager.replace_word(enemy)
+
+        if energy_hits:
+            self.enemy_manager.ensure_enemy()
 
     def _calculate_word_score(
         self,
@@ -418,8 +666,31 @@ class Game:
     def _update(self, delta_time: float) -> None:
         """Actualiza el cursor, las apariciones y los enemigos."""
 
+        # La animación idle se mantiene activa en las pantallas con movimiento
+        # y se congela junto con la acción durante la pausa o el resultado.
+        if self.state in (
+            GameState.MENU,
+            GameState.DIFFICULTY,
+            GameState.OPTIONS,
+            GameState.CREDITS,
+            GameState.CONTACT,
+            GameState.COUNTDOWN,
+            GameState.PLAYING,
+            GameState.DYING,
+        ):
+            self.battlefield_renderer.update(delta_time)
+
         if self.state is GameState.COUNTDOWN:
             self._update_countdown(delta_time)
+            self.effect_manager.update(delta_time)
+            return
+
+        if self.state is GameState.DYING:
+            self.effect_manager.update(delta_time)
+
+            if self.battlefield_renderer.is_player_death_finished:
+                self.state = GameState.GAME_OVER
+                self._finish_game()
             return
 
         # Solo la partida activa actualiza tiempo, cursor y movimiento.
@@ -441,6 +712,8 @@ class Game:
             delta_time,
             self.power_up_manager.enemy_speed_multiplier,
         )
+        energy_hits = self.projectile_manager.update(delta_time)
+        self._resolve_energy_hits(energy_hits)
         self._handle_enemy_arrivals()
         self.effect_manager.update(delta_time)
 
@@ -468,6 +741,7 @@ class Game:
 
         if self.countdown_remaining == 0.0:
             self.state = GameState.PLAYING
+            self.showing_revive = False
             self._reset_caret_blink()
             self._block_text_input()
 
@@ -476,33 +750,50 @@ class Game:
 
         reached_enemies = self.enemy_manager.reached_enemies()
 
+        # Todos desaparecen antes de resolver el daño. Así, si varios llegan
+        # juntos o se agota la última vida, ninguno permanece sobre el jugador.
+        for enemy in reached_enemies:
+            self.enemy_manager.remove(enemy)
+            self.projectile_manager.cancel_target(enemy)
+
+        if self.active_enemy in reached_enemies:
+            self.active_enemy = None
+            self.typed_text = ""
+            self._reset_caret_blink()
+
         for enemy in reached_enemies:
             self.audio_manager.play("player_damage")
-            self.effect_manager.create_player_damage(PLAYER_POSITION)
-            self.enemy_manager.remove(enemy)
             self.missed_words += 1
             self.lives -= 1
             self.combo = 0
 
-            # Solo se descarta el texto si pertenecía al enemigo alcanzado.
-            if enemy is self.active_enemy:
-                self.active_enemy = None
-                self.typed_text = ""
-                self._reset_caret_blink()
-
             if self.lives <= 0:
-                self.state = GameState.GAME_OVER
-                self._finish_game()
+                self.effect_manager.create_player_death(PLAYER_POSITION)
+                self.battlefield_renderer.play_player_death()
+                self.state = GameState.DYING
                 return
+
+            self.effect_manager.create_player_damage(PLAYER_POSITION)
+            self.battlefield_renderer.play_player_damage()
 
         if reached_enemies:
             self.enemy_manager.ensure_enemy()
 
-    def _start_new_game(self) -> None:
+    def _start_new_game(
+        self,
+        difficulty: Difficulty | None = None,
+    ) -> None:
         """Restablece el progreso y comienza una partida nueva."""
 
-        # La primera partida reutiliza exactamente el enemigo visto en el menú.
-        preserve_menu_enemy = self.state is GameState.MENU
+        restarting_after_game_over = self.state is GameState.GAME_OVER
+        starting_from_difficulty = self.state is GameState.DIFFICULTY
+        self.showing_revive = (
+            restarting_after_game_over or starting_from_difficulty
+        )
+
+        if difficulty is not None:
+            self.selected_difficulty = difficulty
+        self.wave_manager.set_difficulty(self.selected_difficulty)
 
         self.completed_words = 0
         self.missed_words = 0
@@ -515,11 +806,19 @@ class Game:
         self.active_enemy = None
         self.typing_stats.reset()
         self.wave_manager.reset()
-        self.enemy_manager.reset(
-            preserve_first_enemy=preserve_menu_enemy,
-        )
+        self.enemy_manager.reset()
         self.effect_manager.reset()
+        self.projectile_manager.reset()
         self.power_up_manager.reset()
+        self.battlefield_renderer.reset_enemy_animations()
+
+        if self.showing_revive:
+            # La muerte invertida comunica visualmente que comienza otra ronda.
+            self.battlefield_renderer.play_player_revive()
+            self.effect_manager.create_player_revive(PLAYER_POSITION)
+        else:
+            self.battlefield_renderer.reset_player_animation()
+
         self.audio_manager.play("game_start")
         self._start_countdown()
 
@@ -550,7 +849,6 @@ class Game:
             + CONTROL_INPUT_BLOCK_DURATION
         )
 
-
     def _reset_caret_blink(self) -> None:
         """Muestra el cursor inmediatamente después de editar el texto."""
 
@@ -560,46 +858,197 @@ class Game:
     def _resize_window(self, width: int, height: int) -> None:
         """Aplica un tamaño mínimo al redimensionar la ventana."""
 
+        # En pantalla completa el sistema operativo controla las dimensiones.
+        if self.is_fullscreen:
+            return
+
         window_size = (
             max(MIN_WINDOW_WIDTH, width),
             max(MIN_WINDOW_HEIGHT, height),
         )
+        self.windowed_size = window_size
         self.display_surface = pygame.display.set_mode(
             window_size,
             pygame.RESIZABLE,
         )
 
+    def _toggle_fullscreen(self) -> None:
+        """Alterna entre pantalla completa y el último tamaño de ventana."""
+
+        try:
+            if self.is_fullscreen:
+                display_surface = pygame.display.set_mode(
+                    self.windowed_size,
+                    pygame.RESIZABLE,
+                )
+                target_position = self.windowed_position
+            else:
+                # Una ventana sin bordes ocupa el escritorio sin activar el
+                # modo exclusivo que puede resultar inestable en Windows.
+                self.windowed_size = self.display_surface.get_size()
+                self.windowed_position = self._get_window_position()
+                desktop_sizes = pygame.display.get_desktop_sizes()
+                desktop_size = (
+                    desktop_sizes[0]
+                    if desktop_sizes
+                    else self.windowed_size
+                )
+                display_surface = pygame.display.set_mode(
+                    desktop_size,
+                    pygame.NOFRAME,
+                )
+                target_position = (0, 0)
+        except pygame.error:
+            # Si el sistema rechaza el cambio, se conserva el modo actual.
+            return
+
+        self.display_surface = display_surface
+        self._set_window_position(target_position)
+        self.is_fullscreen = not self.is_fullscreen
+
+        self.audio_manager.play("menu_adjust")
+
+    @staticmethod
+    def _get_window_position() -> tuple[int, int]:
+        """Obtiene la posición de la ventana para poder restaurarla."""
+
+        if sys.platform != "win32":
+            return (0, 0)
+
+        window_handle = pygame.display.get_wm_info().get("window")
+
+        if not window_handle:
+            return (0, 0)
+
+        window_rect = wintypes.RECT()
+        success = ctypes.windll.user32.GetWindowRect(
+            wintypes.HWND(window_handle),
+            ctypes.byref(window_rect),
+        )
+
+        if not success:
+            return (0, 0)
+
+        return (window_rect.left, window_rect.top)
+
+    @staticmethod
+    def _set_window_position(position: tuple[int, int]) -> None:
+        """Mueve la ventana sin cambiar su tamaño ni robar el foco."""
+
+        if sys.platform != "win32":
+            return
+
+        window_handle = pygame.display.get_wm_info().get("window")
+
+        if not window_handle:
+            return
+
+        no_size = 0x0001
+        no_z_order = 0x0004
+        no_activate = 0x0010
+        flags = no_size | no_z_order | no_activate
+
+        ctypes.windll.user32.SetWindowPos(
+            wintypes.HWND(window_handle),
+            wintypes.HWND(0),
+            position[0],
+            position[1],
+            0,
+            0,
+            flags,
+        )
+
+    @staticmethod
+    def _is_window_maximized() -> bool:
+        """Detecta la ventana maximizada para aplicar el escalado de relleno."""
+
+        if sys.platform != "win32":
+            return False
+
+        window_handle = pygame.display.get_wm_info().get("window")
+        if not window_handle:
+            return False
+
+        return bool(
+            ctypes.windll.user32.IsZoomed(
+                wintypes.HWND(window_handle)
+            )
+        )
+
+    def _display_to_logical(
+        self,
+        position: tuple[int, int],
+    ) -> tuple[int, int] | None:
+        """Convierte un clic de la ventana a las coordenadas del lienzo."""
+
+        display_width, display_height = self.display_surface.get_size()
+        horizontal_scale = display_width / WINDOW_WIDTH
+        vertical_scale = display_height / WINDOW_HEIGHT
+        should_fill_display = (
+            self.is_fullscreen or self._is_window_maximized()
+        )
+        scale = (
+            max(horizontal_scale, vertical_scale)
+            if should_fill_display
+            else min(horizontal_scale, vertical_scale)
+        )
+        scaled_width = WINDOW_WIDTH * scale
+        scaled_height = WINDOW_HEIGHT * scale
+        offset_x = (display_width - scaled_width) / 2
+        offset_y = (display_height - scaled_height) / 2
+        logical_x = (position[0] - offset_x) / scale
+        logical_y = (position[1] - offset_y) / scale
+
+        if not (0 <= logical_x < WINDOW_WIDTH and 0 <= logical_y < WINDOW_HEIGHT):
+            return None
+        return (round(logical_x), round(logical_y))
+
     def _draw(self) -> None:
         """Dibuja el fotograma actual y lo presenta en la ventana."""
 
-        # Limpia el contenido del fotograma anterior.
-        self.screen.fill(BACKGROUND_COLOR)
+        menu_states = {
+            GameState.MENU,
+            GameState.DIFFICULTY,
+            GameState.OPTIONS,
+            GameState.CREDITS,
+            GameState.CONTACT,
+        }
+        help_over_menu = (
+            self.state is GameState.HELP
+            and self.help_return_state in menu_states
+        )
 
-        self.battlefield_renderer.draw(
-            enemy_manager=self.enemy_manager,
-            active_enemy=self.active_enemy,
-            typed_text=self.typed_text,
-            effect_manager=self.effect_manager,
-        )
-        combo_multiplier = self._get_combo_multiplier()
-        self.ui_renderer.draw_interface(
-            typed_text=self.typed_text,
-            caret_visible=self.caret_visible,
-            score=self.score,
-            high_score=self.save_manager.high_score,
-            combo=self.combo,
-            combo_multiplier=combo_multiplier,
-            combo_progress=self._get_combo_progress(),
-            lives=self.lives,
-            typing_stats=self.typing_stats,
-            wave_manager=self.wave_manager,
-            slow_charge_available=(
-                self.power_up_manager.slow_charge_available
-            ),
-            slow_time_remaining=(
-                self.power_up_manager.slow_time_remaining
-            ),
-        )
+        if self.state in menu_states or help_over_menu:
+            # Las pantallas iniciales usan el fondo sin entidades ni carriles.
+            self.battlefield_renderer.draw_menu_background()
+        else:
+            self.battlefield_renderer.draw(
+                enemy_manager=self.enemy_manager,
+                active_enemy=self.active_enemy,
+                typed_text=self.typed_text,
+                effect_manager=self.effect_manager,
+                projectile_manager=self.projectile_manager,
+            )
+
+        if self.state not in menu_states and not help_over_menu:
+            combo_multiplier = self._get_combo_multiplier()
+            self.ui_renderer.draw_interface(
+                typed_text=self.typed_text,
+                caret_visible=self.caret_visible,
+                score=self.score,
+                combo=self.combo,
+                combo_multiplier=combo_multiplier,
+                combo_progress=self._get_combo_progress(),
+                lives=self.lives,
+                typing_stats=self.typing_stats,
+                wave_manager=self.wave_manager,
+                slow_charge_available=(
+                    self.power_up_manager.slow_charge_available
+                ),
+                slow_time_remaining=(
+                    self.power_up_manager.slow_time_remaining
+                ),
+            )
         self.ui_renderer.draw_state_overlay(
             state=self.state,
             countdown_remaining=self.countdown_remaining,
@@ -612,6 +1061,10 @@ class Game:
             typing_stats=self.typing_stats,
             audio_volume=self.audio_manager.volume,
             audio_muted=self.audio_manager.muted,
+            is_fullscreen=self.is_fullscreen,
+            menu_selection=self.menu_selection,
+            difficulty_selection=self.difficulty_selection,
+            restarting=self.showing_revive,
         )
 
         # El aviso queda sobre el HUD sin bloquear ni pausar la acción.
@@ -627,14 +1080,28 @@ class Game:
         """Escala el fotograma lógico conservando su proporción original."""
 
         display_width, display_height = self.display_surface.get_size()
-        scale = min(
-            display_width / WINDOW_WIDTH,
-            display_height / WINDOW_HEIGHT,
+        horizontal_scale = display_width / WINDOW_WIDTH
+        vertical_scale = display_height / WINDOW_HEIGHT
+
+        should_fill_display = (
+            self.is_fullscreen or self._is_window_maximized()
         )
-        scaled_size = (
-            max(1, round(WINDOW_WIDTH * scale)),
-            max(1, round(WINDOW_HEIGHT * scale)),
-        )
+
+        if should_fill_display:
+            # En pantalla completa o maximizada se rellena toda el área. El
+            # exceso se recorta por igual en ambos lados del eje correspondiente.
+            scale = max(horizontal_scale, vertical_scale)
+            scaled_size = (
+                max(1, math.ceil(WINDOW_WIDTH * scale)),
+                max(1, math.ceil(WINDOW_HEIGHT * scale)),
+            )
+        else:
+            # En ventana se conserva todo el lienzo aunque aparezcan bandas.
+            scale = min(horizontal_scale, vertical_scale)
+            scaled_size = (
+                max(1, round(WINDOW_WIDTH * scale)),
+                max(1, round(WINDOW_HEIGHT * scale)),
+            )
         if scaled_size == (WINDOW_WIDTH, WINDOW_HEIGHT):
             scaled_frame = self.screen
         else:
@@ -647,7 +1114,7 @@ class Game:
             (display_height - scaled_size[1]) // 2,
         )
 
-        # Las bandas conservan la relación de aspecto sin deformar gráficos.
+        # El desplazamiento negativo centra el recorte usado en pantalla completa.
         self.display_surface.fill(BACKGROUND_COLOR)
         self.display_surface.blit(scaled_frame, frame_position)
 

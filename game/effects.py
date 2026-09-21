@@ -218,6 +218,41 @@ class EffectManager:
             )
         )
 
+    def create_player_death(
+        self,
+        position: tuple[float, float],
+    ) -> None:
+        """Refuerza la derrota con una explosión roja más intensa."""
+
+        self._create_burst(
+            pygame.Vector2(position),
+            INCORRECT_COLOR,
+            particle_count=34,
+            maximum_speed=270,
+        )
+
+    def create_player_revive(
+        self,
+        position: tuple[float, float],
+    ) -> None:
+        """Acompaña el reinicio con energía cian y un mensaje breve."""
+
+        revive_position = pygame.Vector2(position)
+        self._create_burst(
+            revive_position,
+            ACCENT_COLOR,
+            particle_count=26,
+            maximum_speed=190,
+        )
+        self.floating_texts.append(
+            FloatingText(
+                text="REINICIANDO",
+                position=revive_position,
+                color=ACCENT_COLOR,
+                lifetime=1.1,
+            )
+        )
+
     def create_power_up_feedback(
         self,
         position: pygame.Vector2 | tuple[float, float],

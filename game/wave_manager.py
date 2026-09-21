@@ -1,5 +1,7 @@
 """Progresión de oleadas y dificultad de la partida."""
 
+from game.difficulty import Difficulty
+
 from game.settings import (
     ARMORED_ENEMY_BASE_CHANCE,
     ARMORED_ENEMY_CHANCE_INCREMENT,
@@ -30,6 +32,12 @@ class WaveManager:
 
         self.current_wave = 1
         self.completed_words_in_wave = 0
+        self.difficulty = Difficulty.NORMAL
+
+    def set_difficulty(self, difficulty: Difficulty) -> None:
+        """Aplica el nivel elegido a la siguiente partida."""
+
+        self.difficulty = difficulty
 
     @property
     def enemy_speed(self) -> float:
@@ -38,7 +46,7 @@ class WaveManager:
         speed = ENEMY_SPEED + (
             self.current_wave - 1
         ) * ENEMY_SPEED_INCREMENT
-        return min(speed, MAX_ENEMY_SPEED)
+        return min(speed, MAX_ENEMY_SPEED) * self.difficulty.speed_multiplier
 
     @property
     def fast_enemy_chance(self) -> float:
@@ -77,7 +85,8 @@ class WaveManager:
         interval = BASE_ENEMY_SPAWN_INTERVAL - (
             self.current_wave - 1
         ) * SPAWN_INTERVAL_DECREASE
-        return max(interval, MIN_ENEMY_SPAWN_INTERVAL)
+        balanced_interval = max(interval, MIN_ENEMY_SPAWN_INTERVAL)
+        return balanced_interval * self.difficulty.spawn_interval_multiplier
 
     @property
     def max_simultaneous_enemies(self) -> int:

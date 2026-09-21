@@ -5,6 +5,7 @@ from pathlib import Path
 import pygame
 
 from game.settings import (
+    BACKSPACE_SOUND_INTERVAL,
     DEFAULT_AUDIO_VOLUME,
     MUSIC_VOLUME_MULTIPLIER,
 )
@@ -21,6 +22,10 @@ SOUND_FILES = {
     "game_start": "game_start.wav",
     "game_over": "game_over.wav",
     "menu_adjust": "menu_adjust.wav",
+    "typing_key_1": "typing_key_1.wav",
+    "typing_key_2": "typing_key_2.wav",
+    "typing_key_3": "typing_key_3.wav",
+    "backspace": "backspace.wav",
 }
 
 # Cada efecto conserva su intensidad relativa al volumen general.
@@ -34,7 +39,17 @@ SOUND_VOLUME_MULTIPLIERS = {
     "game_start": 0.65,
     "game_over": 0.75,
     "menu_adjust": 0.55,
+    "typing_key_1": 0.35,
+    "typing_key_2": 0.35,
+    "typing_key_3": 0.35,
+    "backspace": 0.30,
 }
+
+TYPING_SOUND_NAMES = (
+    "typing_key_1",
+    "typing_key_2",
+    "typing_key_3",
+)
 
 
 class AudioManager:
@@ -53,6 +68,8 @@ class AudioManager:
         self.muted = False
         self.is_available = False
         self.sounds: dict[str, pygame.mixer.Sound] = {}
+        self.typing_sound_index = 0
+        self.last_backspace_sound_time = -BACKSPACE_SOUND_INTERVAL
 
         try:
             # Algunos sistemas no inicializan Mixer al ejecutar pygame.init().
@@ -106,10 +123,38 @@ class AudioManager:
         if sound is not None:
             sound.play()
 
+    def play_typing_key(self) -> None:
+        """Alterna clics breves para que el tecleo resulte menos repetitivo."""
+
+        sound_name = TYPING_SOUND_NAMES[self.typing_sound_index]
+        self.typing_sound_index = (
+            self.typing_sound_index + 1
+        ) % len(TYPING_SOUND_NAMES)
+        self.play(sound_name)
+
+    def play_backspace(self) -> None:
+        """Reproduce el borrado con un intervalo que evita solapamientos."""
+
+        current_time = pygame.time.get_ticks()
+
+        if (
+            current_time - self.last_backspace_sound_time
+            < BACKSPACE_SOUND_INTERVAL
+        ):
+            return
+
+        self.last_backspace_sound_time = current_time
+        self.play("backspace")
+
     def change_volume(self, amount: float) -> None:
         """Modifica el volumen general y lo mantiene entre cero y uno."""
 
-        self.volume = min(1.0, max(0.0, self.volume + amount))
+        self.set_volume(self.volume + amount)
+
+    def set_volume(self, value: float) -> None:
+        """Fija el volumen desde un control continuo, como un deslizador."""
+
+        self.volume = min(1.0, max(0.0, value))
 
         # Mover el control de volumen recupera el sonido si estaba silenciado.
         self.muted = False

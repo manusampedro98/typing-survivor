@@ -27,6 +27,7 @@ class Enemy:
 
         self.word = word
         self.position = pygame.Vector2(start_position)
+        self.start_position = pygame.Vector2(start_position)
         self.target_position = pygame.Vector2(target_position)
         self.speed = speed
         self.radius = ENEMY_RADIUS
@@ -37,6 +38,10 @@ class Enemy:
         self.label_color = ENEMY_COLOR
         self.max_health = 1
         self.health = self.max_health
+
+        # Un enemigo con un disparo en vuelo permanece visible, pero deja de
+        # ser un objetivo válido hasta que se resuelva el impacto.
+        self.is_pending_hit = False
 
     def take_hit(self) -> bool:
         """Resta resistencia y devuelve si el enemigo ha sido eliminado."""
@@ -65,12 +70,9 @@ class Enemy:
         self.position += offset.normalize() * movement_distance
 
     def has_reached_target(self) -> bool:
-        """Indica si el enemigo ha llegado a la zona del jugador."""
+        """Indica si el enemigo ocupa exactamente la posición del jugador."""
 
-        return (
-            self.position.distance_to(self.target_position)
-            <= ENEMY_REACH_DISTANCE
-        )
+        return self.position == self.target_position
 
     def draw(self, surface: pygame.Surface) -> None:
         """Dibuja una representación provisional del enemigo."""
