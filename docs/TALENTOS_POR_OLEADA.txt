@@ -1,0 +1,40 @@
+TYPING SURVIVOR - TALENTOS DURANTE LA PARTIDA
+
+Estado: idea futura, independiente de la tienda de talentos.
+No cambia las mecánicas actuales.
+
+CONCEPTO
+
+Al terminar ciertas oleadas, el jugador elige uno entre tres talentos
+aleatorios. Esas mejoras solo duran la partida actual. La elección permite
+construir estrategias distintas en cada intento.
+
+IDEAS DE TALENTOS
+
+Precisión
+- Pulso certero: una palabra sin errores frena brevemente al enemigo más cercano.
+- Racha limpia: varias palabras perfectas aportan algo de carga a un potenciador.
+- Objetivo marcado: una palabra perfecta mejora el siguiente impacto contra
+  el escudo de un enemigo blindado.
+
+Control
+- Onda expansiva: el Pulso EMP aplica una ralentización breve al terminar
+  el aturdimiento.
+- Rebote extra: Multishot alcanza un objetivo adicional.
+- Tiempo prestado: completar palabras durante Ralentización prolonga un poco
+  su duración, hasta un límite.
+
+Supervivencia
+- Última oportunidad: una vez por partida, recibir daño con una sola vida
+  provoca una ralentización breve.
+- Corazón resistente: al consumir el corazón verde de Recuperación, el
+  enemigo atacante queda ralentizado.
+- Shield reactivo: al consumir Shield, los enemigos próximos retroceden.
+
+PENDIENTE
+
+Probar la duración de las oleadas y decidir cuándo se ofrece cada elección.
+Ajustar valores y combinaciones para que escribir bien siga siendo importante.
+
+La propuesta de compras permanentes con puntos está guardada por separado
+en TIENDA_DE_TALENTOS.txt.

@@ -12,6 +12,11 @@ from game.settings import (
     ARMORED_ENEMY_DEATH_FPS,
     ARMORED_ENEMY_IDLE_FPS,
     ARMORED_ENEMY_SHIELD_BREAK_FPS,
+    BOSS_VISIBLE_SIZE,
+    BOSS_IDLE_FPS,
+    BOSS_DAMAGE_FPS,
+    BOSS_SUMMON_FPS,
+    BOSS_DEATH_FPS,
     ENEMY_ARRIVAL_SIZE,
     FAST_ENEMY_DAMAGE_FPS,
     FAST_ENEMY_DEATH_FPS,
@@ -19,10 +24,21 @@ from game.settings import (
     FAST_ENEMY_FLIGHT_ROLL,
     FAST_ENEMY_FLIGHT_SPEED,
     FAST_ENEMY_IDLE_FPS,
+    GOBLIN_ENEMY_DAMAGE_FPS,
+    GOBLIN_ENEMY_DEATH_FPS,
+    GOBLIN_ENEMY_IDLE_FPS,
     MIN_ENEMY_PERSPECTIVE_SCALE,
+    NECROMANCER_ENEMY_DAMAGE_FPS,
+    NECROMANCER_ENEMY_DEATH_FPS,
+    NECROMANCER_ENEMY_IDLE_FPS,
+    NECROMANCER_ENEMY_SUMMON_FPS,
+    NECROMANCER_VISIBLE_SIZE,
     NORMAL_ENEMY_DAMAGE_FPS,
     NORMAL_ENEMY_DEATH_FPS,
     NORMAL_ENEMY_IDLE_FPS,
+    SKELETON_ENEMY_DAMAGE_FPS,
+    SKELETON_ENEMY_DEATH_FPS,
+    SKELETON_ENEMY_IDLE_FPS,
 )
 
 
@@ -43,6 +59,26 @@ ENEMY_IDLE_SEQUENCES = {
         "armored_enemy_idle",
         3,
     ),
+    EnemyType.GOBLIN: (
+        ASSETS_ROOT / "enemies" / "goblin" / "idle",
+        "goblin_enemy_idle",
+        4,
+    ),
+    EnemyType.NECROMANCER: (
+        ASSETS_ROOT / "enemies" / "necromancer" / "idle",
+        "necromancer_enemy_idle",
+        4,
+    ),
+    EnemyType.SKELETON: (
+        ASSETS_ROOT / "enemies" / "skeleton" / "idle",
+        "skeleton_enemy_idle",
+        4,
+    ),
+    EnemyType.BOSS: (
+        ASSETS_ROOT / "enemies" / "boss" / "idle",
+        "remains_golem_idle",
+        4,
+    ),
 }
 ENEMY_DAMAGE_SEQUENCES = {
     EnemyType.NORMAL: (
@@ -58,6 +94,26 @@ ENEMY_DAMAGE_SEQUENCES = {
     EnemyType.ARMORED: (
         ASSETS_ROOT / "enemies" / "armored" / "shield_break",
         "armored_enemy_shield_break",
+        3,
+    ),
+    EnemyType.GOBLIN: (
+        ASSETS_ROOT / "enemies" / "goblin" / "damage",
+        "goblin_enemy_damage",
+        3,
+    ),
+    EnemyType.NECROMANCER: (
+        ASSETS_ROOT / "enemies" / "necromancer" / "damage",
+        "necromancer_enemy_damage",
+        3,
+    ),
+    EnemyType.SKELETON: (
+        ASSETS_ROOT / "enemies" / "skeleton" / "damage",
+        "skeleton_enemy_damage",
+        2,
+    ),
+    EnemyType.BOSS: (
+        ASSETS_ROOT / "enemies" / "boss" / "damage",
+        "remains_golem_damage",
         3,
     ),
 }
@@ -77,6 +133,38 @@ ENEMY_DEATH_SEQUENCES = {
         "armored_enemy_death",
         6,
     ),
+    EnemyType.GOBLIN: (
+        ASSETS_ROOT / "enemies" / "goblin" / "death",
+        "goblin_enemy_death",
+        6,
+    ),
+    EnemyType.NECROMANCER: (
+        ASSETS_ROOT / "enemies" / "necromancer" / "death",
+        "necromancer_enemy_death",
+        6,
+    ),
+    EnemyType.SKELETON: (
+        ASSETS_ROOT / "enemies" / "skeleton" / "death",
+        "skeleton_enemy_death",
+        6,
+    ),
+    EnemyType.BOSS: (
+        ASSETS_ROOT / "enemies" / "boss" / "death",
+        "remains_golem_death",
+        6,
+    ),
+}
+ENEMY_SUMMON_SEQUENCES = {
+    EnemyType.NECROMANCER: (
+        ASSETS_ROOT / "enemies" / "necromancer" / "summon",
+        "necromancer_enemy_summon",
+        6,
+    ),
+    EnemyType.BOSS: (
+        ASSETS_ROOT / "enemies" / "boss" / "summon",
+        "remains_golem_summon",
+        6,
+    ),
 }
 ENEMY_BROKEN_SEQUENCES = {
     EnemyType.ARMORED: (
@@ -89,16 +177,28 @@ ENEMY_IDLE_FPS = {
     EnemyType.NORMAL: NORMAL_ENEMY_IDLE_FPS,
     EnemyType.FAST: FAST_ENEMY_IDLE_FPS,
     EnemyType.ARMORED: ARMORED_ENEMY_IDLE_FPS,
+    EnemyType.GOBLIN: GOBLIN_ENEMY_IDLE_FPS,
+    EnemyType.NECROMANCER: NECROMANCER_ENEMY_IDLE_FPS,
+    EnemyType.SKELETON: SKELETON_ENEMY_IDLE_FPS,
+    EnemyType.BOSS: BOSS_IDLE_FPS,
 }
 ENEMY_DAMAGE_FPS = {
     EnemyType.NORMAL: NORMAL_ENEMY_DAMAGE_FPS,
     EnemyType.FAST: FAST_ENEMY_DAMAGE_FPS,
     EnemyType.ARMORED: ARMORED_ENEMY_SHIELD_BREAK_FPS,
+    EnemyType.GOBLIN: GOBLIN_ENEMY_DAMAGE_FPS,
+    EnemyType.NECROMANCER: NECROMANCER_ENEMY_DAMAGE_FPS,
+    EnemyType.SKELETON: SKELETON_ENEMY_DAMAGE_FPS,
+    EnemyType.BOSS: BOSS_DAMAGE_FPS,
 }
 ENEMY_DEATH_FPS = {
     EnemyType.NORMAL: NORMAL_ENEMY_DEATH_FPS,
     EnemyType.FAST: FAST_ENEMY_DEATH_FPS,
     EnemyType.ARMORED: ARMORED_ENEMY_DEATH_FPS,
+    EnemyType.GOBLIN: GOBLIN_ENEMY_DEATH_FPS,
+    EnemyType.NECROMANCER: NECROMANCER_ENEMY_DEATH_FPS,
+    EnemyType.SKELETON: SKELETON_ENEMY_DEATH_FPS,
+    EnemyType.BOSS: BOSS_DEATH_FPS,
 }
 
 
@@ -184,6 +284,11 @@ class EnemyRenderer:
                 *sequence
             )
 
+        for enemy_type, sequence in ENEMY_SUMMON_SEQUENCES.items():
+            self.frames[enemy_type]["summon"] = self._load_sequence(
+                *sequence
+            )
+
         for enemy_type, sequence in ENEMY_BROKEN_SEQUENCES.items():
             self.frames[enemy_type]["broken_walk"] = self._load_sequence(
                 *sequence
@@ -208,7 +313,7 @@ class EnemyRenderer:
         self.scaled_frames: dict[
             tuple[EnemyType, str, int, int, int], pygame.Surface
         ] = {}
-        self.damage_animations: dict[Enemy, TimedEnemyAnimation] = {}
+        self.active_animations: dict[Enemy, TimedEnemyAnimation] = {}
         self.defeat_animations: list[EnemyDefeatAnimation] = []
         self.fast_enemy_shadows: dict[tuple[int, int], pygame.Surface] = {}
         self.animation_time = 0.0
@@ -218,7 +323,7 @@ class EnemyRenderer:
 
         self.animation_time += delta_time
 
-        for enemy, animation in list(self.damage_animations.items()):
+        for enemy, animation in list(self.active_animations.items()):
             frame_count = len(
                 self.frames.get(enemy.enemy_type, {}).get(
                     animation.name,
@@ -226,7 +331,7 @@ class EnemyRenderer:
                 )
             )
             if animation.update(delta_time, frame_count):
-                self.damage_animations.pop(enemy, None)
+                self.active_animations.pop(enemy, None)
 
         active_defeats = []
         for animation in self.defeat_animations:
@@ -249,13 +354,27 @@ class EnemyRenderer:
         if not frames:
             return
 
-        self.damage_animations[enemy] = TimedEnemyAnimation(
+        self.active_animations[enemy] = TimedEnemyAnimation(
             name=animation_name,
             fps=ENEMY_DAMAGE_FPS.get(
                 enemy.enemy_type,
                 NORMAL_ENEMY_DAMAGE_FPS,
             ),
         )
+
+    def play_summon(self, enemy: Enemy) -> None:
+        """Reproduce el conjuro al crear un esqueleto."""
+
+        frames = self.frames.get(enemy.enemy_type, {}).get("summon", [])
+        if frames:
+            self.active_animations[enemy] = TimedEnemyAnimation(
+                name="summon",
+                fps=(
+                    BOSS_SUMMON_FPS
+                    if enemy.enemy_type is EnemyType.BOSS
+                    else NECROMANCER_ENEMY_SUMMON_FPS
+                ),
+            )
 
     def play_death(self, enemy: Enemy) -> None:
         """Encadena daño y muerte en la posición del impacto final."""
@@ -302,13 +421,19 @@ class EnemyRenderer:
                 frame_durations=frame_durations,
             )
         )
-        self.damage_animations.pop(enemy, None)
+        self.active_animations.pop(enemy, None)
 
-    def reset(self) -> None:
-        """Elimina animaciones pertenecientes a la partida anterior."""
+    def reset(self, preserve_boss_death: bool = False) -> None:
+        """Elimina reacciones antiguas y conserva la muerte final si procede."""
 
-        self.damage_animations.clear()
-        self.defeat_animations.clear()
+        self.active_animations.clear()
+        self.defeat_animations = (
+            [
+                animation for animation in self.defeat_animations
+                if animation.enemy_type is EnemyType.BOSS
+            ]
+            if preserve_boss_death else []
+        )
         self.animation_time = 0.0
 
     def draw(self, surface: pygame.Surface, enemy: Enemy) -> None:
@@ -360,12 +485,22 @@ class EnemyRenderer:
                 frame_index,
                 animation.canvas_size,
             )
-            destination = frame.get_rect(
-                center=(
-                    round(animation.position.x),
-                    round(animation.position.y),
+            if animation.enemy_type in (EnemyType.GOBLIN, EnemyType.SKELETON):
+                # Todos sus fotogramas apoyan los pies en la misma línea.
+                destination = frame.get_rect(
+                    midbottom=(
+                        round(animation.position.x),
+                        round(animation.position.y)
+                        + animation.canvas_size[1] // 2,
+                    )
                 )
-            )
+            else:
+                destination = frame.get_rect(
+                    center=(
+                        round(animation.position.x),
+                        round(animation.position.y),
+                    )
+                )
             surface.blit(frame, destination)
 
     def get_draw_dimensions(self, enemy: Enemy) -> tuple[int, int]:
@@ -377,7 +512,11 @@ class EnemyRenderer:
             return (fallback_size, fallback_size)
 
         target_longest_side = (
-            ENEMY_ARRIVAL_SIZE * self._get_perspective_scale(enemy)
+            BOSS_VISIBLE_SIZE
+            if enemy.enemy_type is EnemyType.BOSS
+            else NECROMANCER_VISIBLE_SIZE
+            if enemy.enemy_type is EnemyType.NECROMANCER
+            else ENEMY_ARRIVAL_SIZE * self._get_perspective_scale(enemy)
         )
         image_scale = target_longest_side / max(bounds.size)
         return (
@@ -398,9 +537,9 @@ class EnemyRenderer:
     def _get_enemy_frame(self, enemy: Enemy) -> tuple[str, int]:
         """Selecciona el frame de daño o el idle correspondiente."""
 
-        damage_animation = self.damage_animations.get(enemy)
-        if damage_animation is not None:
-            return (damage_animation.name, damage_animation.frame_index)
+        active_animation = self.active_animations.get(enemy)
+        if active_animation is not None:
+            return (active_animation.name, active_animation.frame_index)
 
         if (
             enemy.enemy_type is EnemyType.ARMORED
@@ -448,7 +587,18 @@ class EnemyRenderer:
         if scaled_frame is None:
             frame = self.frames[enemy_type][animation_name][frame_index]
             visible_bounds = self._get_visible_bounds(frame)
-            if visible_bounds is None or max(visible_bounds.size) == 0:
+            if enemy_type is EnemyType.BOSS:
+                # El lienzo común conserva el tamaño del golem entre poses.
+                reference = self.reference_bounds[EnemyType.BOSS]
+                scale = max(canvas_size) / max(reference.size)
+                scaled_frame = pygame.transform.smoothscale(
+                    frame,
+                    (
+                        max(1, round(frame.get_width() * scale)),
+                        max(1, round(frame.get_height() * scale)),
+                    ),
+                )
+            elif visible_bounds is None or max(visible_bounds.size) == 0:
                 scaled_frame = pygame.transform.smoothscale(
                     frame,
                     canvas_size,

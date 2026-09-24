@@ -1,0 +1,45 @@
+TYPING SURVIVOR - TIENDA DE TALENTOS
+
+CONCEPTO
+
+Los puntos obtenidos en cada partida se acumulan como puntos disponibles para
+comprar talentos permanentes. Los puntos son la moneda: no hay conversión ni una
+segunda divisa. Comprar un talento reduce los puntos disponibles, pero nunca
+modifica el récord ni la puntuación histórica de las partidas.
+
+Los talentos adquiridos mejoran las partidas futuras.
+
+CATÁLOGO PROPUESTO
+
+1. Vida adicional
+   Aumenta en uno el máximo de corazones. Compra de coste alto.
+
+2. Comienzo preparado
+   Cada partida comienza con algo de carga en un potenciador.
+
+3. Más hallazgos
+   Aumenta ligeramente la probabilidad de obtener potenciadores.
+
+4. Pulso certero
+   Completar una palabra sin errores frena brevemente a los enemigo.
+
+5. Rompeescudos
+   Al romper el escudo de un enemigo blindado, lo hace retroceder.
+
+6. Shield reactivo
+   Cuando Shield bloquea un golpe, empuja a los enemigos cercanos.
+
+8. Multishot mejorado
+   La bola de energía puede rebotar una vez más, 
+   se podra comprar hasta un maximo de 5 veces incrementando su coste.
+
+9. Último aliento
+   Una vez por partida, perder una vida cuando solo queda una activa un pulso EMP.
+
+PENDIENTE PARA CUANDO SE IMPLEMENTE
+
+- Fijar precios en puntos según las puntuaciones habituales por partida.
+- Decidir qué talentos tienen varios niveles y cuál es su límite.
+- Diseñar la pantalla de la tienda y mostrar puntos disponibles, precio
+  y efecto de cada compra.
+- Guardar de forma persistente los puntos disponibles y los talentos comprados.

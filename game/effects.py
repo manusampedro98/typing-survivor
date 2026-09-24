@@ -6,7 +6,12 @@ from random import uniform
 
 import pygame
 
-from game.settings import ACCENT_COLOR, INCORRECT_COLOR, POWER_UP_COLOR
+from game.power_up_assets import load_power_up_icon
+from game.power_up_type import PowerUpType
+from game.settings import (
+    ACCENT_COLOR, BOSS_WAVE_INTERVAL, INCORRECT_COLOR,
+    WINDOW_HEIGHT, WINDOW_WIDTH,
+)
 
 
 @dataclass
@@ -128,8 +133,13 @@ class WaveAnnouncement:
         else:
             alpha = 255
 
+        title = (
+            f"JEFE · OLEADA {self.wave_number}"
+            if self.wave_number % BOSS_WAVE_INTERVAL == 0
+            else f"OLEADA {self.wave_number}"
+        )
         text_surface = font.render(
-            f"OLEADA {self.wave_number}",
+            title,
             True,
             ACCENT_COLOR,
         )
@@ -151,6 +161,158 @@ class WaveAnnouncement:
         surface.blit(text_surface, text_rect)
 
 
+@dataclass
+class ExpandingPulse:
+    """Onda que nace en el jugador y se desvanece al cruzar la arena."""
+
+    position: pygame.Vector2
+    color: tuple[int, int, int]
+    delay: float = 0.0
+    lifetime: float = 1.05
+    max_radius: int = 930
+    age: float = 0.0
+
+    @property
+    def is_alive(self) -> bool:
+        return self.age < self.delay + self.lifetime
+
+    def update(self, delta_time: float) -> None:
+        self.age += delta_time
+
+    def draw(self, canvas: pygame.Surface) -> None:
+        if self.age < self.delay:
+            return
+        progress = min(1.0, (self.age - self.delay) / self.lifetime)
+        radius = round(32 + (self.max_radius - 32) * progress)
+        alpha = round(190 * (1.0 - progress) ** 1.3)
+        center = (round(self.position.x), round(self.position.y))
+        pygame.draw.circle(
+            canvas, (*self.color, max(0, alpha // 4)), center, radius, width=15
+        )
+        pygame.draw.circle(
+            canvas, (*self.color, alpha), center, radius, width=4
+        )
+
+
+@dataclass
+class OneUpHeart:
+    """Corazón verde con flecha ascendente al ganar una vida."""
+
+    position: pygame.Vector2
+    color: tuple[int, int, int]
+    lifetime: float = 1.55
+    age: float = 0.0
+
+    @property
+    def is_alive(self) -> bool:
+        return self.age < self.lifetime
+
+    def update(self, delta_time: float) -> None:
+        self.age += delta_time
+
+    def draw(self, surface: pygame.Surface, font: pygame.font.Font) -> None:
+        progress = min(1.0, self.age / self.lifetime)
+        alpha = round(255 * min(1.0, (1.0 - progress) / 0.28))
+        canvas = pygame.Surface((190, 96), pygame.SRCALPHA)
+        outline = (24, 72, 48, alpha)
+        fill = (*self.color, alpha)
+        highlight = (205, 255, 216, alpha)
+
+        pygame.draw.line(canvas, outline, (35, 75), (35, 38), width=9)
+        pygame.draw.line(canvas, fill, (35, 74), (35, 38), width=5)
+        pygame.draw.polygon(canvas, outline, ((19, 43), (35, 17), (51, 43)))
+        pygame.draw.polygon(canvas, fill, ((24, 40), (35, 21), (46, 40)))
+        pygame.draw.circle(canvas, outline, (85, 38), 15)
+        pygame.draw.circle(canvas, outline, (109, 38), 15)
+        pygame.draw.polygon(canvas, outline, ((70, 42), (124, 42), (97, 76)))
+        pygame.draw.circle(canvas, fill, (85, 38), 12)
+        pygame.draw.circle(canvas, fill, (109, 38), 12)
+        pygame.draw.polygon(canvas, fill, ((73, 42), (121, 42), (97, 71)))
+        pygame.draw.circle(canvas, highlight, (83, 34), 4)
+
+        label = font.render("+1UP", True, self.color)
+        label.set_alpha(alpha)
+        canvas.blit(label, label.get_rect(center=(151, 48)))
+        draw_position = (
+            round(self.position.x - canvas.get_width() / 2),
+            round(self.position.y - 48 - 78 * progress),
+        )
+        surface.blit(canvas, draw_position)
+
+
+@dataclass
+class ShieldImpact:
+    """Hace aparecer el emblema al absorber un golpe."""
+
+    position: pygame.Vector2
+    image: pygame.Surface
+    lifetime: float = 0.55
+    age: float = 0.0
+
+    @property
+    def is_alive(self) -> bool:
+        return self.age < self.lifetime
+
+    def update(self, delta_time: float) -> None:
+        self.age += delta_time
+
+    def draw(self, surface: pygame.Surface) -> None:
+        progress = min(1.0, self.age / self.lifetime)
+        scale = 0.75 + progress * 0.8
+        size = (
+            max(1, round(self.image.get_width() * scale)),
+            max(1, round(self.image.get_height() * scale)),
+        )
+        emblem = pygame.transform.smoothscale(self.image, size)
+        emblem.set_alpha(round(245 * (1.0 - progress) ** 1.5))
+        surface.blit(
+            emblem,
+            emblem.get_rect(center=(round(self.position.x), round(self.position.y))),
+        )
+
+
+@dataclass
+class PowerUpDrop:
+    """Icono de recompensa que asciende desde el enemigo derrotado."""
+
+    position: pygame.Vector2
+    image: pygame.Surface
+    color: tuple[int, int, int]
+    lifetime: float = 1.15
+    age: float = 0.0
+
+    @property
+    def is_alive(self) -> bool:
+        return self.age < self.lifetime
+
+    def update(self, delta_time: float) -> None:
+        self.age += delta_time
+
+    def draw(self, surface: pygame.Surface) -> None:
+        progress = min(1.0, self.age / self.lifetime)
+        fade = min(1.0, (1.0 - progress) / 0.3)
+        size = round(44 + 7 * min(1.0, progress / 0.2))
+        scale = size / max(self.image.get_size())
+        image = pygame.transform.smoothscale(
+            self.image,
+            (
+                max(1, round(self.image.get_width() * scale)),
+                max(1, round(self.image.get_height() * scale)),
+            ),
+        )
+        image.set_alpha(round(255 * fade))
+        center = (
+            max(36, min(WINDOW_WIDTH - 36, round(self.position.x + 32))),
+            max(42, round(self.position.y - 28 - 54 * progress)),
+        )
+        halo = pygame.Surface((68, 68), pygame.SRCALPHA)
+        pygame.draw.circle(halo, (*self.color, round(42 * fade)), (34, 34), 30)
+        pygame.draw.circle(halo, (*self.color, round(145 * fade)),
+                           (34, 34), 28, width=2)
+        surface.blit(halo, halo.get_rect(center=center))
+        surface.blit(image, image.get_rect(center=center))
+
+
 class EffectManager:
     """Crea, actualiza y dibuja todos los efectos temporales."""
 
@@ -160,6 +322,17 @@ class EffectManager:
         self.particles: list[Particle] = []
         self.floating_texts: list[FloatingText] = []
         self.wave_announcement: WaveAnnouncement | None = None
+        self.expanding_pulses: list[ExpandingPulse] = []
+        self.one_up_hearts: list[OneUpHeart] = []
+        self.shield_impacts: list[ShieldImpact] = []
+        self.power_up_drops: list[PowerUpDrop] = []
+        self._shield_icon = load_power_up_icon(PowerUpType.SHIELD, 108)
+        self._drop_icons = {
+            power_up: icon
+            for power_up in PowerUpType
+            if (icon := load_power_up_icon(power_up, 48)) is not None
+        }
+        self._pulse_canvas: pygame.Surface | None = None
 
     def create_wave_announcement(self, wave_number: int) -> None:
         """Inicia el aviso de la nueva oleada."""
@@ -185,11 +358,15 @@ class EffectManager:
             maximum_speed,
         )
 
-        feedback_text = (
-            f"+{awarded_points}"
-            if defeated
-            else f"ESCUDO -1  +{awarded_points}"
-        )
+        if awarded_points == 0:
+            # El rebote mantiene partículas e impacto sin texto sobre la arena.
+            if defeated:
+                return
+            feedback_text = "ESCUDO -1"
+        elif defeated:
+            feedback_text = f"+{awarded_points}"
+        else:
+            feedback_text = f"ESCUDO -1  +{awarded_points}"
         self.floating_texts.append(
             FloatingText(
                 text=feedback_text,
@@ -253,34 +430,95 @@ class EffectManager:
             )
         )
 
-    def create_power_up_feedback(
+    def create_power_up_drop(
         self,
         position: pygame.Vector2 | tuple[float, float],
-        text: str,
+        power_up: PowerUpType,
     ) -> None:
-        """Destaca la obtención o activación de una ralentización."""
+        """Muestra el icono de la recompensa en el punto de la baja."""
 
-        effect_position = pygame.Vector2(position)
+        origin = pygame.Vector2(position)
+        icon = self._drop_icons.get(power_up)
+        if icon is not None:
+            self.power_up_drops.append(PowerUpDrop(origin, icon, power_up.color))
+        self._create_burst(origin, power_up.color, 12, 150)
+
+    def create_power_up_burst(
+        self,
+        position: pygame.Vector2 | tuple[float, float],
+        color: tuple[int, int, int],
+    ) -> None:
+        """Confirma una activación sin mostrar texto flotante."""
+
+        self._create_burst(pygame.Vector2(position), color, 14, 160)
+
+    def create_emp_pulse(
+        self,
+        position: tuple[float, float],
+        color: tuple[int, int, int],
+    ) -> None:
+        """Emite tres ondas escalonadas desde el jugador."""
+
+        origin = pygame.Vector2(position)
+        self.expanding_pulses.extend(
+            ExpandingPulse(pygame.Vector2(origin), color, delay=index * 0.16)
+            for index in range(3)
+        )
+
+    def create_shield_block(
+        self,
+        position: tuple[float, float],
+        color: tuple[int, int, int],
+    ) -> None:
+        """Hace estallar la barrera en chispas y dos ondas cercanas."""
+
+        origin = pygame.Vector2(position)
         self._create_burst(
-            effect_position,
-            POWER_UP_COLOR,
-            particle_count=14,
-            maximum_speed=160,
+            origin, color, particle_count=28, maximum_speed=230
         )
-        self.floating_texts.append(
-            FloatingText(
-                text=text,
-                position=effect_position,
-                color=POWER_UP_COLOR,
-                lifetime=1.2,
+        self.expanding_pulses.extend((
+            ExpandingPulse(
+                pygame.Vector2(origin), color,
+                lifetime=0.48, max_radius=190,
+            ),
+            ExpandingPulse(
+                pygame.Vector2(origin), (40, 215, 255), delay=0.09,
+                lifetime=0.5, max_radius=220,
+            ),
+        ))
+        if self._shield_icon is not None:
+            self.shield_impacts.append(
+                ShieldImpact(
+                    pygame.Vector2(origin.x, origin.y - 45), self._shield_icon
+                )
             )
+
+    def create_one_up_heart(
+        self,
+        position: tuple[float, float],
+        color: tuple[int, int, int],
+    ) -> None:
+        """Muestra una vida ganada con un corazón y una flecha."""
+
+        self._create_burst(
+            pygame.Vector2(position), color, particle_count=18,
+            maximum_speed=150,
         )
+        self.one_up_hearts.append(OneUpHeart(pygame.Vector2(position), color))
 
     def update(self, delta_time: float) -> None:
         """Actualiza los efectos y descarta los que han terminado."""
 
         for particle in self.particles:
             particle.update(delta_time)
+        for pulse in self.expanding_pulses:
+            pulse.update(delta_time)
+        for heart in self.one_up_hearts:
+            heart.update(delta_time)
+        for impact in self.shield_impacts:
+            impact.update(delta_time)
+        for drop in self.power_up_drops:
+            drop.update(delta_time)
         for floating_text in self.floating_texts:
             floating_text.update(delta_time)
         if self.wave_announcement is not None:
@@ -290,6 +528,16 @@ class EffectManager:
             particle
             for particle in self.particles
             if particle.is_alive
+        ]
+        self.expanding_pulses = [pulse for pulse in self.expanding_pulses if pulse.is_alive]
+        self.one_up_hearts = [
+            heart for heart in self.one_up_hearts if heart.is_alive
+        ]
+        self.shield_impacts = [
+            impact for impact in self.shield_impacts if impact.is_alive
+        ]
+        self.power_up_drops = [
+            drop for drop in self.power_up_drops if drop.is_alive
         ]
         self.floating_texts = [
             floating_text
@@ -310,10 +558,25 @@ class EffectManager:
     ) -> None:
         """Dibuja partículas y textos sobre el campo de batalla."""
 
+        if self.expanding_pulses:
+            if self._pulse_canvas is None:
+                self._pulse_canvas = pygame.Surface(
+                    (WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA
+                )
+            self._pulse_canvas.fill((0, 0, 0, 0))
+            for pulse in self.expanding_pulses:
+                pulse.draw(self._pulse_canvas)
+            surface.blit(self._pulse_canvas, (0, 0))
         for particle in self.particles:
             particle.draw(surface)
+        for impact in self.shield_impacts:
+            impact.draw(surface)
+        for drop in self.power_up_drops:
+            drop.draw(surface)
         for floating_text in self.floating_texts:
             floating_text.draw(surface, font)
+        for heart in self.one_up_hearts:
+            heart.draw(surface, font)
 
     def draw_wave_announcement(
         self,
@@ -330,6 +593,10 @@ class EffectManager:
 
         self.particles.clear()
         self.floating_texts.clear()
+        self.expanding_pulses.clear()
+        self.one_up_hearts.clear()
+        self.shield_impacts.clear()
+        self.power_up_drops.clear()
         self.wave_announcement = None
 
     def _create_burst(

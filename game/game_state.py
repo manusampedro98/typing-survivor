@@ -13,6 +13,7 @@ class GameState(Enum):
     CONTACT = auto()
     COUNTDOWN = auto()
     PLAYING = auto()
+    WAVE_BREAK = auto()
     DYING = auto()
     PAUSED = auto()
     HELP = auto()

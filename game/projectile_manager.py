@@ -1,6 +1,6 @@
 """Proyectiles dirigidos y animaciones de impacto del jugador."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pygame
@@ -41,6 +41,7 @@ class EnergyProjectile:
     enemy: Enemy
     awarded_points: int
     position: pygame.Vector2
+    remaining_targets: list[Enemy] = field(default_factory=list)
     frame_index: int = 0
     frame_elapsed_time: float = 0.0
 
@@ -138,6 +139,23 @@ class ProjectileManager:
             )
         )
 
+    def launch_chain(
+        self,
+        enemy: Enemy,
+        chain_targets: list[Enemy],
+        awarded_points: int,
+    ) -> None:
+        """Lanza una bola que rebota por los objetivos indicados."""
+
+        self.projectiles.append(
+            EnergyProjectile(
+                enemy=enemy,
+                awarded_points=awarded_points,
+                position=pygame.Vector2(PLAYER_PROJECTILE_ORIGIN),
+                remaining_targets=list(chain_targets),
+            )
+        )
+
     def update(self, delta_time: float) -> list[EnergyHit]:
         """Actualiza los efectos y devuelve los impactos de este fotograma."""
 
@@ -160,6 +178,11 @@ class ProjectileManager:
                         position=impact_position,
                     )
                 )
+
+                if projectile.remaining_targets:
+                    projectile.enemy = projectile.remaining_targets.pop(0)
+                    projectile.awarded_points = 0
+                    active_projectiles.append(projectile)
             else:
                 active_projectiles.append(projectile)
 
@@ -219,11 +242,20 @@ class ProjectileManager:
     def cancel_target(self, enemy: Enemy) -> None:
         """Retira disparos cuyo objetivo ya ha alcanzado al jugador."""
 
-        self.projectiles = [
-            projectile
-            for projectile in self.projectiles
-            if projectile.enemy is not enemy
-        ]
+        active_projectiles: list[EnergyProjectile] = []
+        for projectile in self.projectiles:
+            projectile.remaining_targets = [
+                target
+                for target in projectile.remaining_targets
+                if target is not enemy
+            ]
+            if projectile.enemy is enemy:
+                if not projectile.remaining_targets:
+                    continue
+                projectile.enemy = projectile.remaining_targets.pop(0)
+                projectile.awarded_points = 0
+            active_projectiles.append(projectile)
+        self.projectiles = active_projectiles
 
     @staticmethod
     def _load_frames(

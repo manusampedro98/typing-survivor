@@ -39,8 +39,9 @@ class Enemy:
         self.max_health = 1
         self.health = self.max_health
 
-        # Un enemigo con un disparo en vuelo permanece visible, pero deja de
-        # ser un objetivo válido hasta que se resuelva el impacto.
+        # El blindado puede mostrar su segunda palabra mientras el primer
+        # disparo sigue en vuelo; el contador conserva ambos impactos.
+        self.pending_hits = 0
         self.is_pending_hit = False
 
     def take_hit(self) -> bool:
@@ -68,6 +69,11 @@ class Enemy:
             return
 
         self.position += offset.normalize() * movement_distance
+
+    def reset_to_start(self) -> None:
+        """Devuelve al enemigo a su posición original tras el pulso EMP."""
+
+        self.position.update(self.start_position)
 
     def has_reached_target(self) -> bool:
         """Indica si el enemigo ocupa exactamente la posición del jugador."""

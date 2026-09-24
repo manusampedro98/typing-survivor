@@ -9,6 +9,10 @@ class EnemyType(Enum):
     NORMAL = ("NORMAL", "Normales")
     FAST = ("RÁPIDO", "Rápidos")
     ARMORED = ("BLINDADO", "Blindados")
+    GOBLIN = ("GOBLING", "Goblings")
+    NECROMANCER = ("NIGROMANTE", "Nigromantes")
+    SKELETON = ("ESQUELETO", "Esqueletos")
+    BOSS = ("JEFE", "Jefes")
 
     def __init__(self, display_name: str, plural_name: str) -> None:
         """Guarda los textos usados al mostrar el tipo y su contador."""

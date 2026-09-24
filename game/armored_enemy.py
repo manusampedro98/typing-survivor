@@ -39,6 +39,8 @@ class ArmoredEnemy(Enemy):
         self.label_color = ARMORED_ENEMY_COLOR
         self.max_health = ARMORED_ENEMY_HEALTH
         self.health = self.max_health
+        self.second_word: str | None = None
+        self.second_word_exposed = False
 
     def draw(self, surface: pygame.Surface) -> None:
         """Dibuja un hexágono que representa la armadura del enemigo."""

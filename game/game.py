@@ -9,6 +9,7 @@ import webbrowser
 
 import pygame
 
+from game.armored_enemy import ArmoredEnemy
 from game.audio_manager import AudioManager
 from game.battlefield_renderer import BattlefieldRenderer
 from game.difficulty import Difficulty
@@ -18,6 +19,7 @@ from game.enemy_type import EnemyType
 from game.effects import EffectManager
 from game.game_state import GameState
 from game.power_up_manager import PowerUpManager
+from game.power_up_type import PowerUpType
 from game.projectile_manager import EnergyHit, ProjectileManager
 from game.save_manager import SaveManager
 from game.settings import (
@@ -34,15 +36,18 @@ from game.settings import (
     MAX_INPUT_LENGTH,
     MIN_WINDOW_HEIGHT,
     MIN_WINDOW_WIDTH,
+    MULTISHOT_CHAIN_TARGETS,
     PLAYER_POSITION,
     POINTS_PER_CHARACTER,
     SMALL_FONT_SIZE,
+    SKELETON_POWER_UP_CHANCE_MULTIPLIER,
     STARTING_LIVES,
     TARGET_FONT_SIZE,
     TITLE_FONT_SIZE,
     WINDOW_HEIGHT,
     WINDOW_TITLE,
     WINDOW_WIDTH,
+    WAVE_BREAK_DURATION,
     WORDS_PER_MULTIPLIER_LEVEL,
 )
 from game.typing_stats import TypingStats
@@ -51,7 +56,7 @@ from game.wave_manager import WaveManager
 from game.word_manager import WordManager
 
 
-LINKEDIN_URL = "https://www.linkedin.com/feed/"
+LINKEDIN_URL = "https://www.linkedin.com/in/manu-sampedro-196475409/"
 GITHUB_URL = "https://github.com/manusampedro98?tab=repositories"
 
 
@@ -139,6 +144,7 @@ class Game:
         self.completed_words = 0
         self.missed_words = 0
         self.lives = STARTING_LIVES
+        self.bonus_heart_active = False
         self.score = 0
         self.combo = 0
 
@@ -155,9 +161,12 @@ class Game:
 
         # La ayuda recuerda si debe regresar al menú, la pausa o el resultado.
         self.help_return_state = GameState.MENU
+        self.help_page = "menu"
+        self.help_selection = 0
 
         # La cuenta atrás conserva su propio tiempo sin mover enemigos.
         self.countdown_remaining = 0.0
+        self.wave_break_remaining = 0.0
 
         # Crea un enemigo inmóvil como fondo del menú inicial.
         self.enemy_manager.reset()
@@ -315,6 +324,22 @@ class Game:
                 if not self.audio_manager.muted:
                     self.audio_manager.play("menu_adjust")
 
+        elif self.state is GameState.HELP and self.help_page == "menu":
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.help_selection = (
+                    self.help_selection - 1
+                ) % len(self.ui_renderer.help_section_actions)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self.help_selection = (
+                    self.help_selection + 1
+                ) % len(self.ui_renderer.help_section_actions)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                self._activate_help_action(
+                    self.ui_renderer.help_section_actions[self.help_selection]
+                )
+
         elif self.state is GameState.GAME_OVER:
             # Durante la derrota, R comienza una partida nueva.
             if event.key == pygame.K_r:
@@ -354,10 +379,6 @@ class Game:
                 pygame.K_KP3: 2,
                 pygame.K_4: 3,
                 pygame.K_KP4: 3,
-                pygame.K_5: 4,
-                pygame.K_KP5: 4,
-                pygame.K_6: 5,
-                pygame.K_KP6: 5,
             }
 
             if event.key in power_up_keys:
@@ -370,8 +391,12 @@ class Game:
                     self.audio_manager.play_backspace()
 
                     # Vaciar el campo permite seleccionar otro enemigo.
-                    if not self.typed_text:
-                        self.active_enemy = None
+                    candidates = self.enemy_manager.matching_targets(
+                        self.typed_text
+                    ) if self.typed_text else []
+                    self.active_enemy = (
+                        candidates[0] if len(candidates) == 1 else None
+                    )
 
                     self._reset_caret_blink()
 
@@ -379,7 +404,10 @@ class Game:
         """Pausa, reanuda o cierra según el estado actual."""
 
         if self.state is GameState.HELP:
-            self.state = self.help_return_state
+            if self.help_page == "menu":
+                self.state = self.help_return_state
+            else:
+                self.help_page = "menu"
         elif self.state in (
             GameState.DIFFICULTY,
             GameState.OPTIONS,
@@ -388,7 +416,7 @@ class Game:
         ):
             self.state = GameState.MENU
             self.dragging_volume_slider = False
-        elif self.state is GameState.DYING:
+        elif self.state in (GameState.DYING, GameState.WAVE_BREAK):
             # La breve secuencia final no se interrumpe con Escape.
             return
         elif self.state in (GameState.PLAYING, GameState.COUNTDOWN):
@@ -403,7 +431,22 @@ class Game:
         """Abre la ayuda y conserva la pantalla desde la que se accedió."""
 
         self.help_return_state = self.state
+        self.help_page = "menu"
+        self.help_selection = 0
         self.state = GameState.HELP
+        self.audio_manager.play("menu_adjust")
+
+    def _activate_help_action(self, action: str) -> None:
+        """Abre una ficha o regresa desde la ayuda."""
+
+        if action == "CERRAR":
+            self.state = self.help_return_state
+        elif action == "VOLVER":
+            self.help_page = "menu"
+        elif action in self.ui_renderer.help_section_actions:
+            self.help_page = "controls" if action == "CONTROLES" else "enemies"
+        else:
+            return
         self.audio_manager.play("menu_adjust")
 
     def _activate_menu_action(self, action: str) -> None:
@@ -441,8 +484,16 @@ class Game:
             )
             if difficulty_index is not None:
                 self.difficulty_selection = difficulty_index
-        elif self.state is GameState.OPTIONS and self.dragging_volume_slider:
+        elif self.state in (GameState.OPTIONS, GameState.PAUSED) and self.dragging_volume_slider:
             self._set_volume_from_slider(logical_position)
+        elif self.state is GameState.HELP and self.help_page == "menu":
+            action = self.ui_renderer.get_help_action_at(
+                logical_position, self.help_page
+            )
+            if action in self.ui_renderer.help_section_actions:
+                self.help_selection = self.ui_renderer.help_section_actions.index(
+                    action
+                )
 
     def _handle_mouse_click(self, position: tuple[int, int]) -> None:
         """Activa botones de portada y tarjetas de dificultad con el ratón."""
@@ -477,10 +528,25 @@ class Game:
                     self.audio_manager.play("menu_adjust")
             elif action == "PANTALLA_COMPLETA":
                 self._toggle_fullscreen()
+        elif self.state is GameState.PAUSED:
+            action = self.ui_renderer.get_pause_control_at(logical_position)
+            if action == "VOLUMEN":
+                self.dragging_volume_slider = True
+                self._set_volume_from_slider(logical_position)
+            elif action == "MUTE":
+                self.audio_manager.toggle_mute()
+                if not self.audio_manager.muted:
+                    self.audio_manager.play("menu_adjust")
+            elif action == "AYUDA":
+                self._open_help()
+            elif action == "CONTINUAR":
+                self._start_countdown()
         elif self.state is GameState.HELP:
-            action = self.ui_renderer.get_help_action_at(logical_position)
-            if action == "CERRAR":
-                self.state = self.help_return_state
+            action = self.ui_renderer.get_help_action_at(
+                logical_position, self.help_page
+            )
+            if action is not None:
+                self._activate_help_action(action)
         elif self.state in (GameState.CREDITS, GameState.CONTACT):
             action = self.ui_renderer.get_information_action_at(
                 logical_position
@@ -495,7 +561,10 @@ class Game:
     def _set_volume_from_slider(self, position: tuple[int, int]) -> None:
         """Actualiza el volumen según la posición pulsada en el deslizador."""
 
-        volume = self.ui_renderer.get_volume_from_position(position)
+        if self.state is GameState.PAUSED:
+            volume = self.ui_renderer.get_pause_volume_from_position(position)
+        else:
+            volume = self.ui_renderer.get_volume_from_position(position)
         self.audio_manager.set_volume(volume)
 
     def _append_text(self, new_text: str) -> None:
@@ -515,24 +584,54 @@ class Game:
             self._append_character(character)
 
     def _append_character(self, character: str) -> None:
-        """Añade un carácter al objetivo seleccionado por su letra inicial."""
+        """Mantiene abiertos los objetivos que comparten prefijo."""
 
-        # La respuesta audiovisual ocurre con cada letra, incluso si no existe
-        # un enemigo compatible o el carácter termina siendo incorrecto.
         self.battlefield_renderer.register_player_keystroke()
         self.audio_manager.play_typing_key()
 
         if self.active_enemy is None:
-            self.active_enemy = self.enemy_manager.select_target(character)
+            proposed_text = self.typed_text + character
+            candidates = self.enemy_manager.matching_targets(proposed_text)
+            if candidates:
+                self.typing_stats.register_character(character, character)
+                self.typed_text = proposed_text
+                # Una palabra exacta se resuelve aunque otra sea más larga.
+                exact_match = next(
+                    (enemy for enemy in candidates if enemy.word == proposed_text),
+                    None,
+                )
+                if exact_match is not None:
+                    self.active_enemy = exact_match
+                elif len(candidates) == 1:
+                    self.active_enemy = candidates[0]
+                self._reset_caret_blink()
+                if self.active_enemy is not None and (
+                    self.typed_text == self.active_enemy.word
+                ):
+                    self._complete_current_word()
+                return
 
+            if not self.typed_text:
+                # Una inicial sin objetivo no inicia la escritura.
+                self._reset_caret_blink()
+                return
+
+            # Un error en un prefijo ambiguo se asigna al candidato más
+            # cercano, de modo que Retroceso pueda corregirlo.
+            self.active_enemy = self.enemy_manager.select_target(
+                self.typed_text
+            )
             if self.active_enemy is None:
-                # Una inicial sin objetivo disponible se ignora: el jugador no
-                # puede conocer una respuesta válida que no existe en pantalla.
+                self.typed_text = ""
                 self._reset_caret_blink()
                 return
 
         target_word = self.active_enemy.word
-        input_limit = min(MAX_INPUT_LENGTH, len(target_word))
+        input_limit = (
+            len(target_word)
+            if self.active_enemy.enemy_type is EnemyType.BOSS
+            else min(MAX_INPUT_LENGTH, len(target_word))
+        )
 
         if len(self.typed_text) >= input_limit:
             return
@@ -565,20 +664,38 @@ class Game:
         )
         self.score += awarded_points
         self.completed_words += 1
-        wave_changed = self.wave_manager.register_completed_word()
-
-        if wave_changed:
-            self.effect_manager.create_wave_announcement(
-                self.wave_manager.current_wave
-            )
-            self.audio_manager.play("wave_start")
         self.typed_text = ""
         self.active_enemy = None
 
-        # La palabra se resuelve al escribirla, pero el daño visual espera a
-        # que la bola alcance al enemigo reservado.
+        # El daño sigue esperando a la bola. El blindado expone de inmediato
+        # su segunda palabra y permite escribirla durante ese trayecto.
+        completed_enemy.pending_hits += 1
         completed_enemy.is_pending_hit = True
-        self.projectile_manager.launch(completed_enemy, awarded_points)
+        if (
+            isinstance(completed_enemy, ArmoredEnemy)
+            and completed_enemy.enemy_type is EnemyType.ARMORED
+            and completed_enemy.second_word is not None
+        ):
+            self.enemy_manager.replace_word(completed_enemy)
+            completed_enemy.is_pending_hit = False
+        chain_targets: list[Enemy] = []
+        if self.power_up_manager.multishot_armed:
+            chain_targets = self.enemy_manager.get_chain_targets(
+                excluded_enemy=completed_enemy,
+                limit=MULTISHOT_CHAIN_TARGETS,
+            )
+
+        if chain_targets and self.power_up_manager.consume_multishot():
+            for chain_target in chain_targets:
+                chain_target.pending_hits += 1
+                chain_target.is_pending_hit = True
+            self.projectile_manager.launch_chain(
+                completed_enemy,
+                chain_targets,
+                awarded_points,
+            )
+        else:
+            self.projectile_manager.launch(completed_enemy, awarded_points)
 
         # Si era el último objetivo disponible, se crea otro mientras el
         # proyectil completa su recorrido para mantener el ritmo de escritura.
@@ -588,6 +705,8 @@ class Game:
     def _resolve_energy_hits(self, energy_hits: list[EnergyHit]) -> None:
         """Aplica el daño cuando cada proyectil alcanza realmente al enemigo."""
 
+        wave_completed = False
+        defeated_boss = False
         for energy_hit in energy_hits:
             enemy = energy_hit.enemy
 
@@ -595,7 +714,8 @@ class Game:
             if enemy not in self.enemy_manager.enemies:
                 continue
 
-            enemy.is_pending_hit = False
+            enemy.pending_hits = max(0, enemy.pending_hits - 1)
+            enemy.is_pending_hit = enemy.pending_hits > 0
             enemy_defeated = enemy.take_hit()
             self.effect_manager.create_enemy_feedback(
                 position=energy_hit.position,
@@ -608,36 +728,60 @@ class Game:
                 self.audio_manager.play("enemy_defeat")
                 self.defeated_enemies[enemy.enemy_type] += 1
                 self.battlefield_renderer.play_enemy_death(enemy)
+                if enemy.enemy_type is EnemyType.BOSS:
+                    defeated_boss = True
 
-                if self.power_up_manager.try_grant_slow_charge():
-                    self.audio_manager.play("power_up_ready")
-                    self.effect_manager.create_power_up_feedback(
-                        energy_hit.position,
-                        "RALENTIZACIÓN LISTA",
+                charge_multiplier = (
+                    SKELETON_POWER_UP_CHANCE_MULTIPLIER
+                    if enemy.enemy_type is EnemyType.SKELETON else 1.0
+                )
+                granted_power_up = self.power_up_manager.try_grant_charge(
+                    charge_multiplier
+                )
+                if granted_power_up is not None:
+                    self.effect_manager.create_power_up_drop(
+                        energy_hit.position, granted_power_up
                     )
+                    if granted_power_up.is_automatic:
+                        self._activate_automatic_power_up(granted_power_up)
+                    else:
+                        self.audio_manager.play("power_up_ready")
 
                 self.enemy_manager.remove(enemy)
+                if self.wave_manager.register_defeat(
+                    is_skeleton=enemy.enemy_type is EnemyType.SKELETON,
+                    is_boss=enemy.enemy_type is EnemyType.BOSS,
+                ):
+                    wave_completed = True
             else:
-                # El blindado recibe una palabra nueva después del impacto.
                 self.audio_manager.play("enemy_hit")
                 self.battlefield_renderer.play_enemy_damage(enemy)
-                self.enemy_manager.replace_word(enemy)
+                # La segunda palabra del blindado ya se hizo visible al disparar.
+                if not (
+                    isinstance(enemy, ArmoredEnemy)
+                    and enemy.enemy_type is EnemyType.ARMORED
+                    and enemy.second_word_exposed
+                ):
+                    self.enemy_manager.replace_word(enemy)
 
-        if energy_hits:
+        if wave_completed:
+            self._begin_wave_break(preserve_boss_death=defeated_boss)
+        elif energy_hits:
             self.enemy_manager.ensure_enemy()
 
     def _calculate_word_score(
         self,
         word: str,
-        enemy_multiplier: int,
+        enemy_multiplier: float,
     ) -> int:
         """Calcula los puntos de una palabra según su longitud y combo."""
 
         base_score = len(word) * POINTS_PER_CHARACTER
-        return (
+        return round(
             base_score
             * self._get_combo_multiplier()
             * enemy_multiplier
+            * self.power_up_manager.score_multiplier
         )
 
     def _get_combo_multiplier(self) -> int:
@@ -676,13 +820,19 @@ class Game:
             GameState.CONTACT,
             GameState.COUNTDOWN,
             GameState.PLAYING,
+            GameState.WAVE_BREAK,
             GameState.DYING,
         ):
             self.battlefield_renderer.update(delta_time)
+            self.ui_renderer.update(delta_time)
 
         if self.state is GameState.COUNTDOWN:
             self._update_countdown(delta_time)
             self.effect_manager.update(delta_time)
+            return
+
+        if self.state is GameState.WAVE_BREAK:
+            self._update_wave_break(delta_time)
             return
 
         if self.state is GameState.DYING:
@@ -708,28 +858,108 @@ class Game:
             self.caret_last_toggle = current_time
 
         self.power_up_manager.update(delta_time)
-        self.enemy_manager.update(
+        summoners = self.enemy_manager.update(
             delta_time,
             self.power_up_manager.enemy_speed_multiplier,
         )
+        for summoner in summoners:
+            self.battlefield_renderer.play_enemy_summon(summoner)
         energy_hits = self.projectile_manager.update(delta_time)
         self._resolve_energy_hits(energy_hits)
+        if self.state is GameState.WAVE_BREAK:
+            return
         self._handle_enemy_arrivals()
         self.effect_manager.update(delta_time)
+
+    def _begin_wave_break(self, preserve_boss_death: bool = False) -> None:
+        """Limpia la arena, anuncia el avance y espera dos segundos."""
+        self.wave_manager.advance_wave()
+        self.enemy_manager.clear_for_wave_break()
+        self.projectile_manager.reset()
+        self.battlefield_renderer.reset_enemy_animations(
+            preserve_boss_death=preserve_boss_death
+        )
+        # Los efectos de una recompensa recién obtenida terminan durante la pausa.
+        self.effect_manager.create_wave_announcement(
+            self.wave_manager.current_wave
+        )
+        self.audio_manager.play("wave_start")
+        self.active_enemy = None
+        self.typed_text = ""
+        self.wave_break_remaining = WAVE_BREAK_DURATION
+        self.state = GameState.WAVE_BREAK
+        self._block_text_input()
+
+    def _update_wave_break(self, delta_time: float) -> None:
+        """Mantiene la partida quieta hasta que pueda iniciar la ronda."""
+        self.wave_break_remaining = max(
+            0.0, self.wave_break_remaining - delta_time
+        )
+        self.effect_manager.update(delta_time)
+        if self.wave_break_remaining <= 0.001:
+            self.wave_break_remaining = 0.0
+            self.enemy_manager.start_wave()
+            self.state = GameState.PLAYING
+            self._reset_caret_blink()
+            self._block_text_input()
+
+    def _activate_automatic_power_up(self, power_up: PowerUpType) -> None:
+        """Aplica una recompensa automática y avisa al jugador."""
+
+        if power_up is PowerUpType.RECOVERY:
+            if self.lives < STARTING_LIVES:
+                self.lives += 1
+                gained_life = True
+            elif not self.bonus_heart_active:
+                self.bonus_heart_active = True
+                gained_life = True
+            else:
+                gained_life = False
+            self.audio_manager.play("power_up_activate")
+            if gained_life:
+                self.effect_manager.create_one_up_heart(
+                    PLAYER_POSITION, power_up.color
+                )
+            else:
+                self.effect_manager.create_power_up_burst(
+                    PLAYER_POSITION, power_up.color
+                )
+        elif power_up is PowerUpType.DOUBLE_POINTS:
+            self.power_up_manager.activate_double_points()
+            self.audio_manager.play("power_up_activate")
+            self.effect_manager.create_power_up_burst(
+                PLAYER_POSITION, power_up.color
+            )
 
     def _activate_power_up_slot(self, slot_index: int) -> None:
         """Activa la habilidad asignada a una ranura del HUD."""
 
-        # La primera ranura contiene la única habilidad implementada por ahora.
-        if slot_index != 0:
+        power_up = PowerUpType.from_slot(slot_index)
+        if power_up is None:
             return
 
-        if self.power_up_manager.activate_slow():
-            self.audio_manager.play("power_up_activate")
-            self.effect_manager.create_power_up_feedback(
-                PLAYER_POSITION,
-                "TIEMPO RALENTIZADO",
-            )
+        activated = False
+
+        if power_up is PowerUpType.SLOW:
+            activated = self.power_up_manager.activate_slow()
+        elif power_up is PowerUpType.SHIELD:
+            activated = self.power_up_manager.activate_shield()
+        elif power_up is PowerUpType.EMP:
+            activated = self.power_up_manager.activate_emp()
+            if activated:
+                self.enemy_manager.send_all_to_start()
+                self.effect_manager.create_emp_pulse(
+                    PLAYER_POSITION, power_up.color
+                )
+        elif power_up is PowerUpType.MULTISHOT:
+            activated = self.power_up_manager.arm_multishot()
+        if not activated:
+            return
+
+        self.audio_manager.play("power_up_activate")
+        self.effect_manager.create_power_up_burst(
+            PLAYER_POSITION, power_up.color
+        )
 
     def _update_countdown(self, delta_time: float) -> None:
         """Reduce la espera y activa la partida al llegar a cero."""
@@ -762,10 +992,27 @@ class Game:
             self._reset_caret_blink()
 
         for enemy in reached_enemies:
-            self.audio_manager.play("player_damage")
             self.missed_words += 1
-            self.lives -= 1
             self.combo = 0
+
+            # Shield tiene prioridad sobre el corazón verde de Recuperación.
+            if self.power_up_manager.consume_shield():
+                self.audio_manager.play("power_up_activate")
+                self.effect_manager.create_shield_block(
+                    PLAYER_POSITION, PowerUpType.SHIELD.color
+                )
+                continue
+
+            if self.bonus_heart_active:
+                self.bonus_heart_active = False
+                self.audio_manager.play("power_up_activate")
+                self.effect_manager.create_power_up_burst(
+                    PLAYER_POSITION, PowerUpType.RECOVERY.color
+                )
+                continue
+
+            self.audio_manager.play("player_damage")
+            self.lives -= 1
 
             if self.lives <= 0:
                 self.effect_manager.create_player_death(PLAYER_POSITION)
@@ -798,6 +1045,7 @@ class Game:
         self.completed_words = 0
         self.missed_words = 0
         self.lives = STARTING_LIVES
+        self.bonus_heart_active = False
         self.score = 0
         self.combo = 0
         self.is_new_high_score = False
@@ -806,6 +1054,7 @@ class Game:
         self.active_enemy = None
         self.typing_stats.reset()
         self.wave_manager.reset()
+        self.wave_break_remaining = 0.0
         self.enemy_manager.reset()
         self.effect_manager.reset()
         self.projectile_manager.reset()
@@ -826,6 +1075,7 @@ class Game:
         """Inicia el tiempo de preparación con la acción congelada."""
 
         self.countdown_remaining = COUNTDOWN_DURATION
+        self.dragging_volume_slider = False
         self.state = GameState.COUNTDOWN
         self._reset_caret_blink()
         self._block_text_input()
@@ -1019,7 +1269,7 @@ class Game:
         )
 
         if self.state in menu_states or help_over_menu:
-            # Las pantallas iniciales usan el fondo sin entidades ni carriles.
+            # Las pantallas iniciales usan el fondo sin entidades ni rutas.
             self.battlefield_renderer.draw_menu_background()
         else:
             self.battlefield_renderer.draw(
@@ -1028,6 +1278,7 @@ class Game:
                 typed_text=self.typed_text,
                 effect_manager=self.effect_manager,
                 projectile_manager=self.projectile_manager,
+                power_up_manager=self.power_up_manager,
             )
 
         if self.state not in menu_states and not help_over_menu:
@@ -1042,13 +1293,18 @@ class Game:
                 lives=self.lives,
                 typing_stats=self.typing_stats,
                 wave_manager=self.wave_manager,
-                slow_charge_available=(
-                    self.power_up_manager.slow_charge_available
-                ),
-                slow_time_remaining=(
-                    self.power_up_manager.slow_time_remaining
-                ),
+                power_up_manager=self.power_up_manager,
+                bonus_heart_active=self.bonus_heart_active,
             )
+            if self.state in (
+                GameState.PLAYING,
+                GameState.PAUSED,
+                GameState.COUNTDOWN,
+                GameState.WAVE_BREAK,
+            ):
+                self.battlefield_renderer.draw_slow_overlay(
+                    self.power_up_manager
+                )
         self.ui_renderer.draw_state_overlay(
             state=self.state,
             countdown_remaining=self.countdown_remaining,
@@ -1064,11 +1320,13 @@ class Game:
             is_fullscreen=self.is_fullscreen,
             menu_selection=self.menu_selection,
             difficulty_selection=self.difficulty_selection,
+            help_page=self.help_page,
+            help_selection=self.help_selection,
             restarting=self.showing_revive,
         )
 
         # El aviso queda sobre el HUD sin bloquear ni pausar la acción.
-        if self.state is GameState.PLAYING:
+        if self.state in (GameState.PLAYING, GameState.WAVE_BREAK):
             self.effect_manager.draw_wave_announcement(
                 self.screen,
                 self.title_font,

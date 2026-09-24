@@ -2,25 +2,27 @@
 
 from enum import Enum
 
+from game.settings import ENEMY_SPEED_GROWTH
+
 
 class Difficulty(Enum):
     """Agrupa el ritmo y la frecuencia de aparición de los enemigos."""
 
     EASY = (
         "FÁCIL",
-        "Enemigos más lentos y con más tiempo entre apariciones.",
-        0.85,
-        1.18,
+        "Más enemigos en pantalla, mitad de velocidad y +5 % por oleada.",
+        0.5,
+        0.8,
     )
     NORMAL = (
         "NORMAL",
-        "La experiencia equilibrada de Typing Survivor.",
+        "Ritmo habitual y +15 % de velocidad por oleada.",
         1.0,
         1.0,
     )
     HARD = (
         "DIFÍCIL",
-        "Enemigos más rápidos y oleadas con mayor presión.",
+        "Más presión y +30 % de velocidad por oleada.",
         1.18,
         0.84,
     )
@@ -36,3 +38,19 @@ class Difficulty(Enum):
         self.description = description
         self.speed_multiplier = speed_multiplier
         self.spawn_interval_multiplier = spawn_interval_multiplier
+
+    @property
+    def speed_growth(self) -> float:
+        """Factor de velocidad aplicado en cada nueva oleada."""
+
+        if self is Difficulty.EASY:
+            return 1.05
+        if self is Difficulty.HARD:
+            return 1.30
+        return ENEMY_SPEED_GROWTH
+
+    @property
+    def extra_enemy_slots(self) -> int:
+        """Plazas simultáneas adicionales sin alargar la oleada."""
+
+        return 2 if self is Difficulty.EASY else 0
