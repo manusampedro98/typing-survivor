@@ -4,6 +4,7 @@ from collections import Counter
 import ctypes
 from ctypes import wintypes
 import math
+from pathlib import Path
 import sys
 import webbrowser
 
@@ -65,6 +66,9 @@ from game.word_manager import WordManager
 
 LINKEDIN_URL = "https://www.linkedin.com/in/manu-sampedro-196475409/"
 GITHUB_URL = "https://github.com/manusampedro98?tab=repositories"
+APP_ICON_FILE = (
+    Path(__file__).resolve().parent.parent / "assets" / "images" / "ui" / "app_icon.png"
+)
 
 
 class Game:
@@ -75,6 +79,14 @@ class Game:
 
         # Inicializa los módulos internos necesarios para utilizar Pygame.
         pygame.init()
+
+        # Se establece antes de crear la ventana para que Windows use el icono.
+        try:
+            icon = pygame.image.load(str(APP_ICON_FILE))
+            pygame.display.set_icon(pygame.transform.smoothscale(icon, (32, 32)))
+        except (OSError, pygame.error):
+            # Un problema con el icono no debe impedir iniciar la partida.
+            pass
 
         # La ventana puede cambiar de tamaño sin alterar las coordenadas del juego.
         self.display_surface = pygame.display.set_mode(

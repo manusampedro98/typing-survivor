@@ -24,6 +24,7 @@ try {
     & $Python -m PyInstaller `
         --noconfirm --onedir --windowed `
         --name TypingSurvivor `
+        --icon (Join-Path $projectRoot "assets\images\ui\app_icon.ico") `
         --distpath $distRoot --workpath $buildRoot --specpath $buildRoot `
         --add-data "$(Join-Path $projectRoot 'assets'):assets" `
         --add-data "$(Join-Path $projectRoot 'data'):data" `
