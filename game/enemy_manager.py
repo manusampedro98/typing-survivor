@@ -194,6 +194,31 @@ class EnemyManager:
         for enemy in self.enemies:
             enemy.reset_to_start()
 
+    @staticmethod
+    def push_enemy_away(
+        enemy: Enemy, center: tuple[float, float], distance: float
+    ) -> None:
+        """Hace retroceder a un enemigo móvil sin desplazar invocadores."""
+
+        if isinstance(enemy, (BossEnemy, NecromancerEnemy)):
+            return
+        direction = enemy.position - pygame.Vector2(center)
+        if direction.length_squared() == 0:
+            direction = pygame.Vector2(0, -1)
+        enemy.position += direction.normalize() * distance
+        enemy.position.x = max(60.0, min(WINDOW_WIDTH - 60.0, enemy.position.x))
+        enemy.position.y = max(140.0, min(PLAYER_POSITION[1] - 25.0, enemy.position.y))
+
+    def push_nearby_enemies(
+        self, center: tuple[float, float], radius: float, distance: float
+    ) -> None:
+        """Empuja a los rivales cercanos cuando Shield absorbe daño."""
+
+        origin = pygame.Vector2(center)
+        for enemy in self.enemies:
+            if enemy.position.distance_to(origin) <= radius:
+                self.push_enemy_away(enemy, center, distance)
+
     def get_chain_targets(
         self,
         excluded_enemy: Enemy,

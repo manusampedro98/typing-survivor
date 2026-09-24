@@ -9,6 +9,7 @@ class GameState(Enum):
     MENU = auto()
     DIFFICULTY = auto()
     OPTIONS = auto()
+    SHOP = auto()
     CREDITS = auto()
     CONTACT = auto()
     COUNTDOWN = auto()

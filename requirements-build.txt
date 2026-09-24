@@ -1,0 +1,3 @@
+# Usar en un entorno virtual limpio para compilar la versión de Windows.
+pygame-ce==2.5.8
+pyinstaller==6.22.3

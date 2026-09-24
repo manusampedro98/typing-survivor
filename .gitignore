@@ -1,5 +1,6 @@
 # Entornos de Python
 .venv/
+.venv-build/
 venv/
 env/
 .conda/

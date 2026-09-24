@@ -13,6 +13,7 @@ from game.power_up_assets import load_power_up_icon
 from game.power_up_manager import PowerUpManager
 from game.power_up_type import PowerUpType
 from game.save_manager import HighScore
+from game.talents import TALENTS
 from game.settings import (
     ACCENT_COLOR,
     ARMORED_ENEMY_COLOR,
@@ -65,7 +66,6 @@ from game.settings import (
     SKELETON_ENEMY_CORE_COLOR,
     SKELETON_ENEMY_OUTLINE_COLOR,
     SKELETON_SCORE_MULTIPLIER,
-    STARTING_LIVES,
     TEXT_COLOR,
     TOP_HUD_HEIGHT,
     TOP_HUD_TOP,
@@ -78,17 +78,30 @@ from game.wave_manager import WaveManager
 
 MAIN_MENU_ACTIONS = (
     "JUGAR",
+    "TIENDA",
     "OPCIONES",
     "AYUDA",
     "CRÉDITOS",
     "SALIR",
 )
 MAIN_MENU_BUTTONS = tuple(
-    pygame.Rect(WINDOW_WIDTH // 2 - 175, 263 + index * 66, 350, 52)
+    pygame.Rect(WINDOW_WIDTH // 2 - 175, 245 + index * 60, 350, 52)
     for index in range(len(MAIN_MENU_ACTIONS))
 )
+GAME_OVER_ACTIONS = ("REINICIAR", "TIENDA", "AYUDA", "OPCIONES", "SALIR")
+GAME_OVER_PANEL = pygame.Rect(WINDOW_WIDTH // 2 - 400, 34, 800, 652)
+GAME_OVER_BUTTONS = tuple(
+    pygame.Rect(WINDOW_WIDTH // 2 - 175, 351 + index * 52, 350, 44)
+    for index in range(len(GAME_OVER_ACTIONS))
+)
+SHOP_PANEL = pygame.Rect(52, 28, WINDOW_WIDTH - 104, WINDOW_HEIGHT - 56)
+SHOP_CLOSE_BUTTON = pygame.Rect(SHOP_PANEL.right - 48, SHOP_PANEL.top + 16, 32, 32)
+SHOP_CARDS = tuple(
+    pygame.Rect(90 + (index % 2) * 560, 170 + (index // 2) * 108, 540, 98)
+    for index in range(len(TALENTS))
+)
 DIFFICULTY_CARDS = tuple(
-    pygame.Rect(125 + index * 350, 235, 300, 250)
+    pygame.Rect(WINDOW_WIDTH // 2 - 418 + index * 288, 278, 260, 124)
     for index in range(3)
 )
 OPTIONS_PANEL = pygame.Rect(WINDOW_WIDTH // 2 - 290, 170, 580, 380)
@@ -145,6 +158,7 @@ class UIRenderer:
     """Dibuja el HUD, el campo de escritura y las capas de estado."""
 
     main_menu_actions = MAIN_MENU_ACTIONS
+    game_over_actions = GAME_OVER_ACTIONS
     help_section_actions = HELP_SECTION_ACTIONS
 
     def __init__(
@@ -202,6 +216,7 @@ class UIRenderer:
         wave_manager: WaveManager,
         power_up_manager: PowerUpManager,
         bonus_heart_active: bool,
+        max_lives: int,
     ) -> None:
         """Dibuja la información de la partida y el campo de escritura."""
 
@@ -210,6 +225,7 @@ class UIRenderer:
             lives=lives,
             wave_manager=wave_manager,
             bonus_heart_active=bonus_heart_active,
+            max_lives=max_lives,
         )
         self._draw_bottom_hud(
             typed_text=typed_text,
@@ -237,15 +253,22 @@ class UIRenderer:
         audio_muted: bool,
         is_fullscreen: bool,
         menu_selection: int,
+        game_over_selection: int,
         difficulty_selection: int,
         help_page: str,
         help_selection: int,
         restarting: bool,
+        shop_points: int,
+        shop_levels: dict[str, int],
+        shop_selection: int,
+        shop_message: str,
     ) -> None:
         """Dibuja la pantalla superpuesta que corresponde al estado actual."""
 
         if state is GameState.MENU:
             self._draw_menu(high_score, menu_selection)
+        elif state is GameState.SHOP:
+            self._draw_shop(shop_points, shop_levels, shop_selection, shop_message)
         elif state is GameState.DIFFICULTY:
             self._draw_difficulty(difficulty_selection)
         elif state is GameState.OPTIONS:
@@ -286,6 +309,7 @@ class UIRenderer:
                 wave_manager=wave_manager,
                 defeated_enemies=defeated_enemies,
                 typing_stats=typing_stats,
+                selection=game_over_selection,
             )
 
     @staticmethod
@@ -295,6 +319,26 @@ class UIRenderer:
         for action, button_rect in zip(MAIN_MENU_ACTIONS, MAIN_MENU_BUTTONS):
             if button_rect.collidepoint(position):
                 return action
+        return None
+
+    @staticmethod
+    def get_game_over_action_at(position: tuple[int, int]) -> str | None:
+        """Devuelve la acción del botón de fin de partida pulsado."""
+
+        for action, button_rect in zip(GAME_OVER_ACTIONS, GAME_OVER_BUTTONS):
+            if button_rect.collidepoint(position):
+                return action
+        return None
+
+    @staticmethod
+    def get_shop_action_at(position: tuple[int, int]) -> int | str | None:
+        """Devuelve el talento pulsado o el botón de cierre de la tienda."""
+
+        if SHOP_CLOSE_BUTTON.collidepoint(position):
+            return "CERRAR"
+        for index, card in enumerate(SHOP_CARDS):
+            if card.collidepoint(position):
+                return index
         return None
 
     @staticmethod
@@ -456,6 +500,7 @@ class UIRenderer:
         lives: int,
         wave_manager: WaveManager,
         bonus_heart_active: bool,
+        max_lives: int,
     ) -> None:
         """Agrupa título, puntuación, oleada y vidas en la zona superior."""
 
@@ -490,7 +535,7 @@ class UIRenderer:
                 f"{wave_manager.defeated_in_wave}/{wave_manager.required_kills}"
             ),
         )
-        self._draw_lives(lives, bonus_heart_active)
+        self._draw_lives(lives, bonus_heart_active, max_lives)
 
     def _draw_top_value_panel(
         self,
@@ -525,13 +570,14 @@ class UIRenderer:
         self,
         lives: int,
         bonus_heart_active: bool,
+        max_lives: int,
     ) -> None:
-        """Representa las vidas base y el corazón verde temporal."""
+        """Representa las vidas máximas y el corazón verde temporal."""
 
-        first_heart_x = 1100
         heart_gap = 44
+        first_heart_x = 1100 - max(0, max_lives + int(bonus_heart_active) - 4) * heart_gap
         heart_y = TOP_HUD_TOP + TOP_HUD_HEIGHT // 2
-        for life_index in range(STARTING_LIVES):
+        for life_index in range(max_lives):
             self._draw_heart_icon(
                 center=(first_heart_x + life_index * heart_gap, heart_y),
                 filled=life_index < lives,
@@ -539,7 +585,7 @@ class UIRenderer:
 
         if bonus_heart_active:
             self._draw_heart_icon(
-                center=(first_heart_x + STARTING_LIVES * heart_gap, heart_y),
+                center=(first_heart_x + max_lives * heart_gap, heart_y),
                 filled=True,
                 fill_color=PowerUpType.RECOVERY.color,
                 outline_color=(25, 105, 65),
@@ -1016,20 +1062,31 @@ class UIRenderer:
         wave_manager: WaveManager,
         defeated_enemies: Counter[EnemyType],
         typing_stats: TypingStats,
+        selection: int,
     ) -> None:
-        """Dibuja la capa de derrota y el resultado de la partida."""
+        """Dibuja el resultado y las acciones de fin de partida."""
 
         self._draw_overlay()
+        self._draw_panel(GAME_OVER_PANEL)
 
         game_over_surface = self.title_font.render(
-            "NUEVO RÉCORD" if is_new_high_score else "FIN DE LA PARTIDA",
+            "GAME OVER",
             True,
-            ACCENT_COLOR if is_new_high_score else INCORRECT_COLOR,
+            INCORRECT_COLOR,
         )
         game_over_rect = game_over_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 55)
+            center=(WINDOW_WIDTH // 2, 91)
         )
         self.screen.blit(game_over_surface, game_over_rect)
+
+        if is_new_high_score:
+            record_badge = self.small_font.render(
+                "NUEVO RÉCORD", True, ACCENT_COLOR
+            )
+            self.screen.blit(
+                record_badge,
+                record_badge.get_rect(center=(WINDOW_WIDTH // 2, 133)),
+            )
 
         result_surface = self.body_font.render(
             f"Puntuación: {score}  |  Récord: {high_score.score}",
@@ -1037,7 +1094,7 @@ class UIRenderer:
             TEXT_COLOR,
         )
         result_rect = result_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
+            center=(WINDOW_WIDTH // 2, 169)
         )
         self.screen.blit(result_surface, result_rect)
 
@@ -1045,12 +1102,13 @@ class UIRenderer:
             (
                 f"Palabras: {completed_words}"
                 f"  |  Oleada: {wave_manager.current_wave}"
+                f"  |  +{score} PTS para la tienda"
             ),
             True,
             MUTED_TEXT_COLOR,
         )
         session_rect = session_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 45)
+            center=(WINDOW_WIDTH // 2, 203)
         )
         self.screen.blit(session_surface, session_rect)
 
@@ -1066,7 +1124,7 @@ class UIRenderer:
             defeated_rect = defeated_surface.get_rect(
                 center=(
                     WINDOW_WIDTH // 2,
-                    WINDOW_HEIGHT // 2 + 70 + line_index // 3 * 25,
+                    235 + line_index // 3 * 24,
                 )
             )
             self.screen.blit(defeated_surface, defeated_rect)
@@ -1080,21 +1138,27 @@ class UIRenderer:
             True,
             MUTED_TEXT_COLOR,
         )
-        stats_offset = 125 + max(0, (len(enemy_types) - 1) // 3 - 1) * 25
         stats_rect = stats_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + stats_offset)
+            center=(WINDOW_WIDTH // 2, 319)
         )
         self.screen.blit(stats_surface, stats_rect)
 
-        restart_surface = self.small_font.render(
-            "R: reiniciar  |  H: ayuda y opciones  |  Esc: cerrar",
+        for index, (label, button_rect) in enumerate(
+            zip(GAME_OVER_ACTIONS, GAME_OVER_BUTTONS)
+        ):
+            self._draw_menu_button(
+                button_rect, label, selected=index == selection, compact=True
+            )
+
+        navigation = self.small_font.render(
+            "Arriba / Abajo: seleccionar  ·  Enter: confirmar  ·  Esc: salir",
             True,
             MUTED_TEXT_COLOR,
         )
-        restart_rect = restart_surface.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + stats_offset + 35)
+        self.screen.blit(
+            navigation,
+            navigation.get_rect(center=(WINDOW_WIDTH // 2, 643)),
         )
-        self.screen.blit(restart_surface, restart_rect)
 
     def _draw_menu(self, high_score: HighScore, selection: int) -> None:
         """Dibuja la portada y sus accesos principales."""
@@ -1156,6 +1220,105 @@ class UIRenderer:
             navigation.get_rect(center=(WINDOW_WIDTH // 2, 665)),
         )
 
+    def _draw_shop(
+        self,
+        available_points: int,
+        levels: dict[str, int],
+        selection: int,
+        message: str,
+    ) -> None:
+        """Muestra el saldo y las ocho compras permanentes."""
+
+        self._draw_overlay(alpha=205)
+        self._draw_panel(SHOP_PANEL)
+        self._draw_close_button(SHOP_CLOSE_BUTTON)
+        title = self.title_font.render("TIENDA", True, ACCENT_COLOR)
+        self.screen.blit(
+            title, title.get_rect(center=(WINDOW_WIDTH // 2, 78))
+        )
+        balance = self.body_font.render(
+            f"PUNTOS DISPONIBLES: {available_points:,}".replace(",", "."),
+            True, TEXT_COLOR,
+        )
+        self.screen.blit(
+            balance, balance.get_rect(center=(WINDOW_WIDTH // 2, 130))
+        )
+
+        for index, (talent, card) in enumerate(zip(TALENTS, SHOP_CARDS)):
+            level = levels.get(talent.key, 0)
+            cost = talent.next_cost(level)
+            selected = index == selection
+            pygame.draw.rect(self.screen, BACKGROUND_COLOR, card, border_radius=12)
+            pygame.draw.rect(
+                self.screen,
+                ACCENT_COLOR if selected else BORDER_COLOR,
+                card, width=3 if selected else 2, border_radius=12,
+            )
+
+            name = self.body_font.render(
+                talent.name, True, ACCENT_COLOR if selected else TEXT_COLOR
+            )
+            self.screen.blit(name, (card.left + 16, card.top + 9))
+            level_text = (
+                f"NIVEL {level}/{talent.max_level}"
+                if talent.max_level > 1
+                else ("ADQUIRIDO" if level else "NIVEL 0/1")
+            )
+            level_surface = self.small_font.render(
+                level_text, True, MUTED_TEXT_COLOR
+            )
+            self.screen.blit(
+                level_surface,
+                level_surface.get_rect(topright=(card.right - 16, card.top + 13)),
+            )
+            description = talent.description
+            if talent.key == "precision_pulse":
+                duration = (1.0, 1.5, 2.0)[max(0, level - 1)]
+                description = f"Palabra perfecta: enemigos lentos {duration:g} s."
+            detail = self.small_font.render(description, True, MUTED_TEXT_COLOR)
+            self.screen.blit(detail, (card.left + 16, card.top + 43))
+
+            price_text = (
+                "COMPRA COMPLETA"
+                if cost is None else f"PRECIO: {cost:,} PTS".replace(",", ".")
+            )
+            price_color = (
+                MUTED_TEXT_COLOR if cost is None
+                else TEXT_COLOR if available_points >= cost
+                else INCORRECT_COLOR
+            )
+            price = self.small_font.render(price_text, True, price_color)
+            self.screen.blit(price, (card.left + 16, card.top + 72))
+
+            buy_button = pygame.Rect(card.right - 128, card.top + 65, 110, 28)
+            can_buy = cost is not None and available_points >= cost
+            pygame.draw.rect(
+                self.screen, ACCENT_COLOR if can_buy else PANEL_COLOR,
+                buy_button, border_radius=7,
+            )
+            buy_label = self.small_font.render(
+                "COMPRAR" if cost is not None else "MÁXIMO",
+                True, BACKGROUND_COLOR if can_buy else MUTED_TEXT_COLOR,
+            )
+            self.screen.blit(
+                buy_label, buy_label.get_rect(center=buy_button.center)
+            )
+
+        if message:
+            feedback = self.small_font.render(
+                message,
+                True,
+                ACCENT_COLOR if "COMPRADO" in message else INCORRECT_COLOR,
+            )
+            self.screen.blit(
+                feedback, feedback.get_rect(center=(WINDOW_WIDTH // 2, 620))
+            )
+        hint = self.small_font.render(
+            "Flechas: elegir  ·  Enter o clic: comprar  ·  Esc: volver",
+            True, MUTED_TEXT_COLOR,
+        )
+        self.screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 654)))
+
     def _draw_difficulty(self, selection: int) -> None:
         """Muestra las tres dificultades antes de iniciar la ronda."""
 
@@ -1206,24 +1369,7 @@ class UIRenderer:
             )
             self.screen.blit(
                 label,
-                label.get_rect(center=(card_rect.centerx, card_rect.top + 52)),
-            )
-            self._draw_wrapped_centered_text(
-                difficulty.description,
-                card_rect.centerx,
-                card_rect.top + 105,
-                card_rect.width - 48,
-                MUTED_TEXT_COLOR,
-            )
-
-            status = self.small_font.render(
-                "SELECCIONADA" if selected else "",
-                True,
-                ACCENT_COLOR,
-            )
-            self.screen.blit(
-                status,
-                status.get_rect(center=(card_rect.centerx, card_rect.bottom - 35)),
+                label.get_rect(center=card_rect.center),
             )
 
         hint = self.small_font.render(
@@ -1233,7 +1379,7 @@ class UIRenderer:
         )
         self.screen.blit(
             hint,
-            hint.get_rect(center=(WINDOW_WIDTH // 2, 610)),
+            hint.get_rect(center=(WINDOW_WIDTH // 2, 515)),
         )
 
     def _draw_options(

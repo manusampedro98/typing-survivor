@@ -3,6 +3,7 @@
 from random import choice, random
 
 from game.power_up_type import PowerUpType
+from game.talents import PRECISION_SLOW_DURATIONS, PRECISION_SLOW_SPEED_MULTIPLIER
 from game.settings import (
     DOUBLE_POINTS_DURATION,
     EMP_STUN_DURATION,
@@ -25,6 +26,7 @@ class PowerUpManager:
         self.slow_time_remaining = 0.0
         self.emp_stun_time_remaining = 0.0
         self.double_points_time_remaining = 0.0
+        self.precision_slow_time_remaining = 0.0
         self.shield_active = False
         self.multishot_armed = False
 
@@ -52,15 +54,37 @@ class PowerUpManager:
 
         if self.is_emp_stun_active:
             return 0.0
-        if self.is_slow_active:
-            return SLOW_ENEMY_SPEED_MULTIPLIER
-        return 1.0
+        speed = SLOW_ENEMY_SPEED_MULTIPLIER if self.is_slow_active else 1.0
+        if self.precision_slow_time_remaining > 0.0:
+            speed = min(speed, PRECISION_SLOW_SPEED_MULTIPLIER)
+        return speed
 
     @property
     def score_multiplier(self) -> int:
         """Devuelve el multiplicador temporal de puntuación."""
 
         return 2 if self.is_double_points_active else 1
+
+    def grant_starting_charge(self) -> PowerUpType:
+        """Prepara un potenciador manual aleatorio al empezar una partida."""
+
+        power_up = choice(tuple(self.charges))
+        self.charges[power_up] = True
+        return power_up
+
+    def trigger_precision_slow(self, level: int) -> None:
+        """Ralentiza brevemente a todos tras una palabra sin errores."""
+
+        if 1 <= level <= len(PRECISION_SLOW_DURATIONS):
+            self.precision_slow_time_remaining = max(
+                self.precision_slow_time_remaining,
+                PRECISION_SLOW_DURATIONS[level - 1],
+            )
+
+    def trigger_emp(self) -> None:
+        """Activa el mismo aturdimiento del EMP sin consumir una carga."""
+
+        self.emp_stun_time_remaining = EMP_STUN_DURATION
 
     def has_charge(self, power_up: PowerUpType) -> bool:
         """Consulta si una ranura contiene una carga preparada."""
@@ -119,7 +143,7 @@ class PowerUpManager:
         if not self._consume_charge(PowerUpType.EMP):
             return False
 
-        self.emp_stun_time_remaining = EMP_STUN_DURATION
+        self.trigger_emp()
         return True
 
     def arm_multishot(self) -> bool:
@@ -187,6 +211,10 @@ class PowerUpManager:
             0.0,
             self.double_points_time_remaining - delta_time,
         )
+        self.precision_slow_time_remaining = max(
+            0.0,
+            self.precision_slow_time_remaining - delta_time,
+        )
 
     def reset(self) -> None:
         """Elimina cargas y efectos pertenecientes a la partida anterior."""
@@ -196,6 +224,7 @@ class PowerUpManager:
         self.slow_time_remaining = 0.0
         self.emp_stun_time_remaining = 0.0
         self.double_points_time_remaining = 0.0
+        self.precision_slow_time_remaining = 0.0
         self.shield_active = False
         self.multishot_armed = False
 

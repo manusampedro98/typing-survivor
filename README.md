@@ -20,6 +20,8 @@ El desarrollo de las mecánicas se encuentra en progreso.
 - Barra inferior con métricas, escritura, combo y cuatro potenciadores manuales.
 - Arena ilustrada con una franja trasera de aparición aleatoria.
 - Pantalla de inicio sobre un fondo limpio, navegable con teclado y ratón.
+- Tienda de talentos permanente con ocho mejoras, saldo y compras con teclado o ratón.
+- Los puntos de cada partida terminada se ingresan en la tienda sin alterar el récord.
 - Botones de juego, opciones, ayuda, salida, créditos y contacto.
 - Selección de dificultad fácil, normal o difícil antes de cada partida.
 - Menú de opciones controlable con teclado o ratón.
@@ -108,7 +110,8 @@ typing-survivor/
 │   ├── player_renderer.py # Carga y animación visual del jugador
 │   ├── enemy_renderer.py # Carga, escala y dibujo de enemigos
 │   ├── projectile_manager.py # Proyectiles dirigidos e impactos
-│   ├── save_manager.py  # Guardado local del mejor resultado
+│   ├── save_manager.py  # Récord, puntos disponibles y talentos persistentes
+│   ├── talents.py       # Catálogo, precios y parámetros de talentos
 │   ├── settings.py      # Configuración visual y general
 │   ├── typing_stats.py  # Velocidad, precisión y errores
 │   ├── ui_renderer.py   # HUD, campo de escritura y pantallas superpuestas
@@ -149,8 +152,8 @@ conda activate typing-survivor
 python main.py
 ```
 
-La pantalla inicial permite jugar, configurar el audio y la pantalla completa,
-consultar la ayuda, abrir Créditos y Contacto o salir. Todos sus accesos se pueden
+La pantalla inicial permite jugar, abrir la tienda de talentos, configurar el audio
+y la pantalla completa, consultar la ayuda, abrir Créditos y salir. Todos sus accesos se pueden
 recorrer con las flechas. Al pulsar Jugar se elige entre dificultad fácil, normal
 o difícil; cada nivel modifica la velocidad y la frecuencia de aparición. Tras
 confirmarla, el jugador reaparece mediante una animación antes de comenzar.
@@ -158,8 +161,10 @@ Al comenzar aparecerán enemigos en puntos aleatorios de la franja trasera de la
 plaza y avanzarán directamente hacia el jugador, manteniendo libre el primer plano.
 El prefijo escrito permite distinguir a los enemigos que comparten inicial;
 cada carácter se marcará según sea correcto o incorrecto. Si un enemigo
-alcanza la base, se perderá una vida. Al agotar las tres vidas puedes
-reiniciar con `R`. Completar varias palabras seguidas aumenta el combo y el
+alcanza la base, se perderá una vida. Al agotarlas, GAME OVER muestra las
+estadísticas y permite reiniciar, abrir la tienda, consultar ayuda y opciones
+o salir con botones; `R` también reinicia. Completar varias palabras seguidas
+aumenta el combo y el
 multiplicador de puntos; perder una vida reinicia el combo. También puedes borrar con
 Retroceso y activar los cuatro potenciadores manuales con `1` a `4`:
 Ralentización, Shield, Pulso EMP y Multishot. Recuperación y Puntuación doble
@@ -197,3 +202,17 @@ Los normales, Goblings y blindados usan palabras de hasta cinco letras; los ráp
 de hasta cuatro; los nigromantes, de más de cinco; y los esqueletos, de tres.
 El blindado muestra desde el principio la palabra de su segundo golpe y permite
 escribirla en cuanto sale el primer disparo, sin esperar al impacto.
+
+## Versión de prueba para Windows
+
+En PowerShell, desde la raíz del proyecto y con Python 3.14:
+
+```powershell
+py -m venv .venv-build
+.\.venv-build\Scripts\python.exe -m pip install -r requirements-build.txt
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1 -Python .\.venv-build\Scripts\python.exe
+```
+
+El script crea `dist/TypingSurvivor-test-Windows.zip` con el juego, sus recursos
+y una guía para testers. Comparte el ZIP completo; el guardado de cada jugador
+permanece en su perfil de Windows.

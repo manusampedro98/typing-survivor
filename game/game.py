@@ -22,6 +22,13 @@ from game.power_up_manager import PowerUpManager
 from game.power_up_type import PowerUpType
 from game.projectile_manager import EnergyHit, ProjectileManager
 from game.save_manager import SaveManager
+from game.talents import (
+    ARMORED_KNOCKBACK_DISTANCE,
+    DROP_BONUS_MULTIPLIER,
+    SHIELD_REACTION_DISTANCE,
+    SHIELD_REACTION_RADIUS,
+    TALENTS,
+)
 from game.settings import (
     AUDIO_VOLUME_STEP,
     BACKGROUND_COLOR,
@@ -143,8 +150,12 @@ class Game:
         # Registra el progreso básico de la sesión actual.
         self.completed_words = 0
         self.missed_words = 0
-        self.lives = STARTING_LIVES
+        self.max_lives = STARTING_LIVES + self.save_manager.talent_level("extra_life")
+        self.lives = self.max_lives
         self.bonus_heart_active = False
+        self.last_breath_used = False
+        self.word_had_error = False
+        self.run_reward_banked = False
         self.score = 0
         self.combo = 0
 
@@ -154,6 +165,10 @@ class Game:
 
         # La portada conserva el foco de teclado y la dificultad seleccionada.
         self.menu_selection = 0
+        self.game_over_selection = 0
+        self.shop_selection = 0
+        self.shop_message = ""
+        self.submenu_return_state = GameState.MENU
         self.difficulty_selection = 1
         self.selected_difficulty = Difficulty.NORMAL
         self.showing_revive = False
@@ -276,6 +291,22 @@ class Game:
             elif event.key == pygame.K_h:
                 self._open_help()
 
+        elif self.state is GameState.SHOP:
+            previous_selection = self.shop_selection
+            if event.key in (pygame.K_LEFT, pygame.K_a):
+                self.shop_selection = (self.shop_selection - 1) % len(TALENTS)
+            elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                self.shop_selection = (self.shop_selection + 1) % len(TALENTS)
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                self.shop_selection = (self.shop_selection - 2) % len(TALENTS)
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self.shop_selection = (self.shop_selection + 2) % len(TALENTS)
+            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                self._buy_selected_talent()
+            if self.shop_selection != previous_selection:
+                self.shop_message = ""
+                self.audio_manager.play("menu_adjust")
+
         elif self.state is GameState.DIFFICULTY:
             if event.key in (
                 pygame.K_LEFT,
@@ -341,11 +372,24 @@ class Game:
                 )
 
         elif self.state is GameState.GAME_OVER:
-            # Durante la derrota, R comienza una partida nueva.
-            if event.key == pygame.K_r:
-                self._start_new_game()
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.game_over_selection = (
+                    self.game_over_selection - 1
+                ) % len(self.ui_renderer.game_over_actions)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self.game_over_selection = (
+                    self.game_over_selection + 1
+                ) % len(self.ui_renderer.game_over_actions)
+                self.audio_manager.play("menu_adjust")
+            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                self._activate_game_over_action(
+                    self.ui_renderer.game_over_actions[self.game_over_selection]
+                )
+            elif event.key == pygame.K_r:
+                self._activate_game_over_action("REINICIAR")
             elif event.key == pygame.K_h:
-                self._open_help()
+                self._activate_game_over_action("AYUDA")
 
         elif self.state is GameState.PAUSED:
             # El audio solo se modifica desde el menú de pausa.
@@ -408,9 +452,11 @@ class Game:
                 self.state = self.help_return_state
             else:
                 self.help_page = "menu"
+        elif self.state in (GameState.OPTIONS, GameState.SHOP):
+            self.state = self.submenu_return_state
+            self.dragging_volume_slider = False
         elif self.state in (
             GameState.DIFFICULTY,
-            GameState.OPTIONS,
             GameState.CREDITS,
             GameState.CONTACT,
         ):
@@ -455,7 +501,13 @@ class Game:
         if action == "JUGAR":
             self.state = GameState.DIFFICULTY
         elif action == "OPCIONES":
+            self.submenu_return_state = GameState.MENU
             self.state = GameState.OPTIONS
+        elif action == "TIENDA":
+            self.submenu_return_state = GameState.MENU
+            self.shop_selection = 0
+            self.shop_message = ""
+            self.state = GameState.SHOP
         elif action == "AYUDA":
             self._open_help()
         elif action == "CRÉDITOS":
@@ -464,6 +516,40 @@ class Game:
             self.state = GameState.CONTACT
         elif action == "SALIR":
             self.running = False
+
+    def _activate_game_over_action(self, action: str) -> None:
+        """Ejecuta la acción seleccionada tras terminar una partida."""
+
+        if action == "REINICIAR":
+            self._start_new_game()
+        elif action == "TIENDA":
+            self.submenu_return_state = GameState.GAME_OVER
+            self.shop_selection = 0
+            self.shop_message = ""
+            self.state = GameState.SHOP
+        elif action == "AYUDA":
+            self._open_help()
+        elif action == "OPCIONES":
+            self.submenu_return_state = GameState.GAME_OVER
+            self.state = GameState.OPTIONS
+        elif action == "SALIR":
+            self.running = False
+
+    def _buy_selected_talent(self) -> None:
+        """Compra el nivel seleccionado y comunica el resultado al jugador."""
+
+        talent = TALENTS[self.shop_selection]
+        level = self.save_manager.talent_level(talent.key)
+        price = talent.next_cost(level)
+        if price is None:
+            self.shop_message = "NIVEL MÁXIMO"
+        elif self.save_manager.available_points < price:
+            self.shop_message = "PUNTOS INSUFICIENTES"
+        elif self.save_manager.purchase_talent(talent.key):
+            self.shop_message = f"{talent.name.upper()} COMPRADO"
+            self.audio_manager.play("power_up_activate")
+        else:
+            self.shop_message = "NO SE PUDO GUARDAR LA COMPRA"
 
     def _handle_mouse_motion(self, position: tuple[int, int]) -> None:
         """Traslada el foco del menú al botón situado bajo el puntero."""
@@ -478,12 +564,23 @@ class Game:
                 self.menu_selection = self.ui_renderer.main_menu_actions.index(
                     action
                 )
+        elif self.state is GameState.GAME_OVER:
+            action = self.ui_renderer.get_game_over_action_at(logical_position)
+            if action in self.ui_renderer.game_over_actions:
+                self.game_over_selection = self.ui_renderer.game_over_actions.index(
+                    action
+                )
         elif self.state is GameState.DIFFICULTY:
             difficulty_index = self.ui_renderer.get_difficulty_at(
                 logical_position
             )
             if difficulty_index is not None:
                 self.difficulty_selection = difficulty_index
+        elif self.state is GameState.SHOP:
+            action = self.ui_renderer.get_shop_action_at(logical_position)
+            if isinstance(action, int) and action != self.shop_selection:
+                self.shop_selection = action
+                self.shop_message = ""
         elif self.state in (GameState.OPTIONS, GameState.PAUSED) and self.dragging_volume_slider:
             self._set_volume_from_slider(logical_position)
         elif self.state is GameState.HELP and self.help_page == "menu":
@@ -507,6 +604,14 @@ class Game:
             if action is not None:
                 self.audio_manager.play("menu_adjust")
                 self._activate_menu_action(action)
+        elif self.state is GameState.GAME_OVER:
+            action = self.ui_renderer.get_game_over_action_at(logical_position)
+            if action is not None:
+                self.game_over_selection = self.ui_renderer.game_over_actions.index(
+                    action
+                )
+                self.audio_manager.play("menu_adjust")
+                self._activate_game_over_action(action)
         elif self.state is GameState.DIFFICULTY:
             difficulty_index = self.ui_renderer.get_difficulty_at(
                 logical_position
@@ -515,10 +620,17 @@ class Game:
                 self.difficulty_selection = difficulty_index
                 self.selected_difficulty = list(Difficulty)[difficulty_index]
                 self._start_new_game(self.selected_difficulty)
+        elif self.state is GameState.SHOP:
+            action = self.ui_renderer.get_shop_action_at(logical_position)
+            if action == "CERRAR":
+                self.state = self.submenu_return_state
+            elif isinstance(action, int):
+                self.shop_selection = action
+                self._buy_selected_talent()
         elif self.state is GameState.OPTIONS:
             action = self.ui_renderer.get_options_control_at(logical_position)
             if action == "CERRAR":
-                self.state = GameState.MENU
+                self.state = self.submenu_return_state
             elif action == "VOLUMEN":
                 self.dragging_volume_slider = True
                 self._set_volume_from_slider(logical_position)
@@ -641,6 +753,8 @@ class Game:
             character,
             expected_character,
         )
+        if character != expected_character:
+            self.word_had_error = True
         self.typed_text += character
         self._reset_caret_blink()
 
@@ -664,6 +778,11 @@ class Game:
         )
         self.score += awarded_points
         self.completed_words += 1
+        if not self.word_had_error:
+            self.power_up_manager.trigger_precision_slow(
+                self.save_manager.talent_level("precision_pulse")
+            )
+        self.word_had_error = False
         self.typed_text = ""
         self.active_enemy = None
 
@@ -682,7 +801,10 @@ class Game:
         if self.power_up_manager.multishot_armed:
             chain_targets = self.enemy_manager.get_chain_targets(
                 excluded_enemy=completed_enemy,
-                limit=MULTISHOT_CHAIN_TARGETS,
+                limit=(
+                    MULTISHOT_CHAIN_TARGETS
+                    + self.save_manager.talent_level("multishot_plus")
+                ),
             )
 
         if chain_targets and self.power_up_manager.consume_multishot():
@@ -735,6 +857,8 @@ class Game:
                     SKELETON_POWER_UP_CHANCE_MULTIPLIER
                     if enemy.enemy_type is EnemyType.SKELETON else 1.0
                 )
+                if self.save_manager.talent_level("more_drops"):
+                    charge_multiplier *= DROP_BONUS_MULTIPLIER
                 granted_power_up = self.power_up_manager.try_grant_charge(
                     charge_multiplier
                 )
@@ -756,6 +880,14 @@ class Game:
             else:
                 self.audio_manager.play("enemy_hit")
                 self.battlefield_renderer.play_enemy_damage(enemy)
+                if (
+                    enemy.enemy_type is EnemyType.ARMORED
+                    and enemy.health == enemy.max_health - 1
+                    and self.save_manager.talent_level("armor_break")
+                ):
+                    self.enemy_manager.push_enemy_away(
+                        enemy, PLAYER_POSITION, ARMORED_KNOCKBACK_DISTANCE
+                    )
                 # La segunda palabra del blindado ya se hizo visible al disparar.
                 if not (
                     isinstance(enemy, ArmoredEnemy)
@@ -816,6 +948,7 @@ class Game:
             GameState.MENU,
             GameState.DIFFICULTY,
             GameState.OPTIONS,
+            GameState.SHOP,
             GameState.CREDITS,
             GameState.CONTACT,
             GameState.COUNTDOWN,
@@ -907,7 +1040,7 @@ class Game:
         """Aplica una recompensa automática y avisa al jugador."""
 
         if power_up is PowerUpType.RECOVERY:
-            if self.lives < STARTING_LIVES:
+            if self.lives < self.max_lives:
                 self.lives += 1
                 gained_life = True
             elif not self.bonus_heart_active:
@@ -989,6 +1122,7 @@ class Game:
         if self.active_enemy in reached_enemies:
             self.active_enemy = None
             self.typed_text = ""
+            self.word_had_error = False
             self._reset_caret_blink()
 
         for enemy in reached_enemies:
@@ -1001,6 +1135,12 @@ class Game:
                 self.effect_manager.create_shield_block(
                     PLAYER_POSITION, PowerUpType.SHIELD.color
                 )
+                if self.save_manager.talent_level("reactive_shield"):
+                    self.enemy_manager.push_nearby_enemies(
+                        PLAYER_POSITION,
+                        SHIELD_REACTION_RADIUS,
+                        SHIELD_REACTION_DISTANCE,
+                    )
                 continue
 
             if self.bonus_heart_active:
@@ -1013,6 +1153,20 @@ class Game:
 
             self.audio_manager.play("player_damage")
             self.lives -= 1
+            last_breath_triggered = False
+            if (
+                self.lives == 1
+                and not self.last_breath_used
+                and self.save_manager.talent_level("last_breath")
+            ):
+                self.last_breath_used = True
+                last_breath_triggered = True
+                self.power_up_manager.trigger_emp()
+                self.enemy_manager.send_all_to_start()
+                self.effect_manager.create_emp_pulse(
+                    PLAYER_POSITION, PowerUpType.EMP.color
+                )
+                self.audio_manager.play("power_up_activate")
 
             if self.lives <= 0:
                 self.effect_manager.create_player_death(PLAYER_POSITION)
@@ -1022,6 +1176,9 @@ class Game:
 
             self.effect_manager.create_player_damage(PLAYER_POSITION)
             self.battlefield_renderer.play_player_damage()
+            if last_breath_triggered:
+                # El pulso también despeja a quienes llegaron en el mismo frame.
+                break
 
         if reached_enemies:
             self.enemy_manager.ensure_enemy()
@@ -1044,8 +1201,12 @@ class Game:
 
         self.completed_words = 0
         self.missed_words = 0
-        self.lives = STARTING_LIVES
+        self.max_lives = STARTING_LIVES + self.save_manager.talent_level("extra_life")
+        self.lives = self.max_lives
         self.bonus_heart_active = False
+        self.last_breath_used = False
+        self.word_had_error = False
+        self.run_reward_banked = False
         self.score = 0
         self.combo = 0
         self.is_new_high_score = False
@@ -1059,6 +1220,8 @@ class Game:
         self.effect_manager.reset()
         self.projectile_manager.reset()
         self.power_up_manager.reset()
+        if self.save_manager.talent_level("prepared_start"):
+            self.power_up_manager.grant_starting_charge()
         self.battlefield_renderer.reset_enemy_animations()
 
         if self.showing_revive:
@@ -1083,8 +1246,12 @@ class Game:
     def _finish_game(self) -> None:
         """Compara el resultado final con el récord almacenado."""
 
+        if self.run_reward_banked:
+            return
+        self.run_reward_banked = True
+        self.game_over_selection = 0
         self.audio_manager.play("game_over")
-        self.is_new_high_score = self.save_manager.update_high_score(
+        self.is_new_high_score = self.save_manager.finish_run(
             score=self.score,
             wave=self.wave_manager.current_wave,
             words_per_minute=self.typing_stats.words_per_minute,
@@ -1260,6 +1427,7 @@ class Game:
             GameState.MENU,
             GameState.DIFFICULTY,
             GameState.OPTIONS,
+            GameState.SHOP,
             GameState.CREDITS,
             GameState.CONTACT,
         }
@@ -1295,6 +1463,7 @@ class Game:
                 wave_manager=self.wave_manager,
                 power_up_manager=self.power_up_manager,
                 bonus_heart_active=self.bonus_heart_active,
+                max_lives=self.max_lives,
             )
             if self.state in (
                 GameState.PLAYING,
@@ -1319,10 +1488,15 @@ class Game:
             audio_muted=self.audio_manager.muted,
             is_fullscreen=self.is_fullscreen,
             menu_selection=self.menu_selection,
+            game_over_selection=self.game_over_selection,
             difficulty_selection=self.difficulty_selection,
             help_page=self.help_page,
             help_selection=self.help_selection,
             restarting=self.showing_revive,
+            shop_points=self.save_manager.available_points,
+            shop_levels=self.save_manager.talent_levels,
+            shop_selection=self.shop_selection,
+            shop_message=self.shop_message,
         )
 
         # El aviso queda sobre el HUD sin bloquear ni pausar la acción.

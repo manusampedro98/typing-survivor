@@ -36,10 +36,20 @@ CATÁLOGO PROPUESTO
 9. Último aliento
    Una vez por partida, perder una vida cuando solo queda una activa un pulso EMP.
 
-PENDIENTE PARA CUANDO SE IMPLEMENTE
+IMPLEMENTACIÓN
 
-- Fijar precios en puntos según las puntuaciones habituales por partida.
-- Decidir qué talentos tienen varios niveles y cuál es su límite.
-- Diseñar la pantalla de la tienda y mostrar puntos disponibles, precio
-  y efecto de cada compra.
-- Guardar de forma persistente los puntos disponibles y los talentos comprados.
+La tienda se abre desde el menú principal. Los puntos se ingresan al terminar
+cada partida y se guardan junto al récord, que no disminuye al comprar.
+Las compras son permanentes y afectan a las partidas posteriores.
+
+Precio inicial por talento: Vida adicional 20.000; Comienzo preparado 3.000;
+Más hallazgos 7.000; Pulso certero 4.000; Rompeescudos 5.000;
+Shield reactivo 7.000; Multishot mejorado 5.000; Último aliento 12.000.
+Solo Pulso certero y Multishot mejorado tienen varios niveles.
+
+Pulso certero tiene 3 niveles: 1, 1,5 y 2 segundos de ralentización.
+Cada nivel adicional cuesta 3.000 puntos más que el anterior.
+Multishot mejorado tiene 5 niveles: cada uno añade un rebote al límite base.
+Cada nivel adicional cuesta 3.000 puntos más que el anterior.
+Las demás mejoras se compran una vez. Más hallazgos eleva la probabilidad
+normal de drop del 25 % al 30 %; Vida adicional añade un corazón máximo.
